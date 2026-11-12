@@ -68,7 +68,7 @@ class ContactSurface(private val ctx: Context) {
         return runCatching {
             val existing = full.loop.rawContactId?.takeIf { exists(it) }
             val rawId = existing ?: create()
-            write(rawId, full, LoopStatus.statusLine(full.events, now))
+            write(rawId, full, LoopStatus.statusLine(full.events, now, full.loop.topic, full.loop.createdAt))
             rawId
         }.onFailure { Log.w(TAG, "sync failed", it) }.getOrNull()
     }

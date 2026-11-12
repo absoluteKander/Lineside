@@ -35,5 +35,6 @@ object LineIcons {
     val Log = icon("log", "M12 8v4l3 2", "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0")
     val Done = icon("done", "M22 11.1V12a10 10 0 1 1-5.9-9.1", "M22 4L12 14l-3-3")
     val Edit = icon("edit", "M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7", "M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z")
+    val Settings = icon("settings", "M4 21v-7", "M4 10V3", "M12 21v-9", "M12 8V3", "M20 21v-5", "M20 12V3", "M1 14h6", "M9 8h6", "M17 16h6")
     val Trash = icon("trash", "M3 6h18", "M8 6V4h8v2", "M19 6l-1 14H6L5 6")
 }

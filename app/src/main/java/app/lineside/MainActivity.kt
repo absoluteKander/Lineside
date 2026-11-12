@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import app.lineside.calls.Pill
 import app.lineside.data.Event
 import app.lineside.data.EventKind
 import app.lineside.data.LoopFull
@@ -36,6 +37,7 @@ import app.lineside.ui.LoopEditor
 import app.lineside.ui.LoopScreen
 import app.lineside.ui.LoopsScreen
 import app.lineside.ui.NoteSheet
+import app.lineside.ui.SettingsScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -48,8 +50,13 @@ class MainActivity : ComponentActivity() {
         setContent { LinesideTheme { Root() } }
     }
 
+    /** Bumped on resume so permission states re-read after a trip to a system screen. */
+    private val resumes = androidx.compose.runtime.mutableIntStateOf(0)
+
     override fun onResume() {
         super.onResume()
+        resumes.intValue++
+        Pill.finishIfAfterCall()
         // Status lines age ("VM 4d" → "VM 5d"); refresh the call-screen copies whenever the app is opened.
         lifecycleScope.launch { app.repo.resyncAll() }
     }
@@ -64,6 +71,7 @@ class MainActivity : ComponentActivity() {
     private data object ListScreen : Screen
     private data class LoopView(val id: Long) : Screen
     private data class Edit(val id: Long?) : Screen
+    private data object SettingsView : Screen
 
     @Composable
     private fun Root() {
@@ -75,11 +83,22 @@ class MainActivity : ComponentActivity() {
         var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
         LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
 
-        var contactsGranted by remember { mutableStateOf(hasContacts()) }
-        var hintDismissed by rememberSaveable { mutableStateOf(false) }
-        val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            contactsGranted = hasContacts()
-            if (contactsGranted) scope.launch { repo.resyncAll() }
+        val settings = app.settings
+        val tick = resumes.intValue
+        var permTick by remember { mutableStateOf(0) }
+        val granted = remember(tick, permTick) { Access.entries.associateWith { it.granted(this@MainActivity) } }
+        val contactsGranted = granted[Access.CONTACTS] == true
+        var hintDismissed by remember { mutableStateOf(settings.contactsHintDismissed) }
+        var callsHintDismissed by remember { mutableStateOf(settings.callsHintDismissed) }
+        var pillOn by remember { mutableStateOf(settings.pillEnabled) }
+        var unknownOn by remember { mutableStateOf(settings.unknownCallerPill) }
+        val askPerms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            permTick++
+            if (hasContacts()) scope.launch { repo.resyncAll() }
+        }
+        val openSystem = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { permTick++ }
+        val allow: (Access) -> Unit = { a ->
+            a.permissions()?.let { askPerms.launch(it) } ?: a.systemIntent(this@MainActivity)?.let { openSystem.launch(it) }
         }
 
         var sheet by remember { mutableStateOf<String?>(null) } // "note", "log", "close"
@@ -88,6 +107,7 @@ class MainActivity : ComponentActivity() {
         BackHandler(enabled = screen != ListScreen) {
             screen = when (val s = screen) { is Edit -> if (s.id != null) LoopView(s.id) else returnTo; else -> ListScreen }
         }
+        val askContacts = { allow(Access.CONTACTS) }
 
         when (val s = screen) {
             ListScreen -> LoopsScreen(
@@ -97,8 +117,20 @@ class MainActivity : ComponentActivity() {
                 onNew = { returnTo = ListScreen; screen = Edit(null) },
                 onKeep = { scope.launch { repo.keep(it) } },
                 onClose = { full -> screen = LoopView(full.loop.id); sheet = "close" },
-                onAllowContacts = { askContacts.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS)) },
-                onDismissHint = { hintDismissed = true },
+                onAllowContacts = askContacts,
+                onDismissHint = { hintDismissed = true; settings.contactsHintDismissed = true },
+                showCallsHint = granted[Access.CALLS] != true && !callsHintDismissed,
+                onAllowCalls = { allow(Access.CALLS) },
+                onDismissCallsHint = { callsHintDismissed = true; settings.callsHintDismissed = true },
+                onSettings = { screen = SettingsView },
+            )
+
+            SettingsView -> SettingsScreen(
+                pillEnabled = pillOn, unknownPill = unknownOn, granted = granted,
+                onBack = { screen = ListScreen },
+                onPill = { pillOn = it; settings.pillEnabled = it },
+                onUnknownPill = { unknownOn = it; settings.unknownCallerPill = it },
+                onAllow = allow,
             )
 
             is LoopView -> {

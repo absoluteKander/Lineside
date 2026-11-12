@@ -59,8 +59,9 @@ object LoopStatus {
      * The short line the phone app shows under the loop's name on the call screen (as the number's label).
      * Kept short: Google Phone truncates around 30 characters. e.g. "Call back · VM 4d", "Waiting · you called 2h".
      */
-    fun statusLine(events: List<Event>, now: Long): String {
-        val last = lastContact(events) ?: return "Loop · new"
+    fun statusLine(events: List<Event>, now: Long, topic: String = "", createdAt: Long = now): String {
+        // Nothing has happened yet: what it's about is the most useful thing to show.
+        val last = lastContact(events) ?: return topic.trim().take(30).ifBlank { "Waiting · opened ${Ago.short(now - createdAt)}" }
         val ago = Ago.short(now - last.at)
         val what = when (last.kind) {
             EventKind.VOICEMAIL -> "VM $ago"

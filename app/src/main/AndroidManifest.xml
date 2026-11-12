@@ -15,6 +15,13 @@
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
     <uses-permission android:name="android.permission.WRITE_SYNC_SETTINGS" />
 
+    <!-- Optional. Know when a call is answered and ends, for note timestamps and call length. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- Optional. The quiet "Tap to jot a note" for calls answered on the lock screen. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Optional. The pill during and just after calls. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- Backup stays off until the user chooses it during onboarding (custom BackupAgent, later). -->
     <application
         android:name=".App"
@@ -33,6 +40,39 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Sees each call's number as it starts. Never blocks, silences or changes a call. -->
+        <service
+            android:name=".calls.ScreeningService"
+            android:exported="true"
+            android:permission="android.permission.BIND_SCREENING_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.CallScreeningService" />
+            </intent-filter>
+        </service>
+
+        <!-- Telecom opens this in the call-screening app when any call ends. Invisible. -->
+        <activity
+            android:name=".calls.PostCallActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.telecom.action.POST_CALL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Opened by the call notification; shows the pill, then disappears. -->
+        <activity
+            android:name=".calls.PillLauncherActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay" />
 
         <!-- Lineside's local account for loop contacts. No login, no server, never syncs. -->
         <service

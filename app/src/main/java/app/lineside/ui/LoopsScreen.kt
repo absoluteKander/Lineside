@@ -50,6 +50,10 @@ fun LoopsScreen(
     onClose: (LoopFull) -> Unit,
     onAllowContacts: () -> Unit,
     onDismissHint: () -> Unit,
+    showCallsHint: Boolean,
+    onAllowCalls: () -> Unit,
+    onDismissCallsHint: () -> Unit,
+    onSettings: () -> Unit,
 ) {
     val (quiet, open) = loops.partition { LoopStatus.isQuiet(it.loop, now) }
     // Your move first, then most recent.
@@ -71,10 +75,25 @@ fun LoopsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                Text("Lineside", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 4.dp))
+                Row(Modifier.padding(start = 4.dp, top = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Lineside", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    androidx.compose.material3.IconButton(onClick = onSettings) { Icon(LineIcons.Settings, "Settings") }
+                }
             }
             if (showContactsHint) item { ContactsHint(onAllowContacts, onDismissHint) }
+            else if (showCallsHint) item {
+                Hint(
+                    "Let Lineside notice calls?",
+                    "When a loop calls, Lineside logs it and can show its context during the call. It only sees the number, " +
+                        "never the audio, and never blocks or changes a call.",
+                    "Allow", onAllowCalls, onDismissCallsHint,
+                )
+            }
+            val recent = recentCalls(loops, now)
+            if (recent.isNotEmpty()) {
+                item { SectionLabel("Recent calls", Modifier.padding(start = 4.dp, top = 4.dp)) }
+                item { RecentCalls(recent, now, onOpen) }
+            }
             if (loops.isEmpty()) item { EmptyState() }
             if (sorted.isNotEmpty()) item { SectionLabel("Open loops", Modifier.padding(start = 4.dp, top = 4.dp)) }
             items(sorted, key = { it.loop.id }) { LoopCard(it, now) { onOpen(it.loop.id) } }
@@ -138,6 +157,50 @@ private fun QuietRow(full: LoopFull, now: Long, onClick: () -> Unit, onKeep: () 
                 onClick = onClose, modifier = Modifier.height(44.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Brand.TealWash, contentColor = Brand.Teal),
             ) { Text("Close") }
+        }
+    }
+}
+
+/** Calls Lineside noticed in the last week, newest first: the place to add context after the fact. */
+private fun recentCalls(loops: List<LoopFull>, now: Long) = loops
+    .flatMap { l -> l.events.filter { it.source == app.lineside.data.EventSource.CALL && now - it.at < 7 * LoopStatus.DAY }.map { l to it } }
+    .sortedByDescending { it.second.at }
+    .take(5)
+
+@Composable
+private fun RecentCalls(rows: List<Pair<LoopFull, app.lineside.data.Event>>, now: Long, onOpen: (Long) -> Unit) = Card(
+    Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+) {
+    Column(Modifier.padding(vertical = 4.dp)) {
+        for ((l, e) in rows) Row(
+            Modifier.fillMaxWidth().clickable { onOpen(l.loop.id) }.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            val (bg, fg) = Fmt.tint(e.kind)
+            androidx.compose.foundation.layout.Box(Modifier.size(32.dp).background(bg, androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+                Icon(Fmt.icon(e.kind), null, tint = fg, modifier = Modifier.size(16.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(l.loop.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val len = e.durationSec?.let { " · ${Fmt.duration(it)}" }.orEmpty()
+                Text("${Fmt.kind(e.kind)} · ${Ago.long(now - e.at)}$len", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun Hint(title: String, body: String, action: String, onAction: () -> Unit, onDismiss: () -> Unit) = Card(
+    shape = RoundedCornerShape(16.dp),
+    colors = CardDefaults.cardColors(containerColor = Brand.TealWash, contentColor = Brand.Ink),
+) {
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, fontWeight = FontWeight.SemiBold)
+        Text(body, fontSize = 13.sp, lineHeight = 18.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onAction) { Text(action) }
+            TextButton(onClick = onDismiss) { Text("Not now") }
         }
     }
 }

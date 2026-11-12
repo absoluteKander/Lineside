@@ -40,7 +40,10 @@ class LoopStatusTest {
         assertEquals("ask for Dana", LoopStatus.highlight(e)?.text)
     }
 
-    @Test fun newLoop() = assertEquals("Loop · new", LoopStatus.statusLine(emptyList(), now))
+    @Test fun newLoopShowsTopicElseAge() {
+        assertEquals("Blood work follow-up", LoopStatus.statusLine(emptyList(), now, topic = "Blood work follow-up"))
+        assertEquals("Waiting · opened 2h", LoopStatus.statusLine(emptyList(), now, createdAt = now - 2 * h))
+    }
 
     @Test fun statusLineFitsTheCallScreen() {
         val e = listOf(ev(EventKind.CALL_OUT, 24 * 30))

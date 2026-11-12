@@ -78,7 +78,7 @@ fun LoopScreen(
                             if (n.label.isNotBlank()) Text(" · ${n.label}", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    Text("Shows on the call screen as: ${LoopStatus.statusLine(full.events, now)}", fontSize = 12.sp,
+                    Text("Shows on the call screen as: ${LoopStatus.statusLine(full.events, now, full.loop.topic, full.loop.createdAt)}", fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         val first = full.numbers.firstOrNull()?.number

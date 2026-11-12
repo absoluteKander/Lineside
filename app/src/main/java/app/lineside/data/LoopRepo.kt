@@ -19,6 +19,7 @@ class LoopRepo(private val db: Db, private val contacts: ContactSurface, private
 
     fun observeAll(): Flow<List<LoopFull>> = dao.observeAll()
     fun observe(id: Long): Flow<LoopFull?> = dao.observe(id)
+    suspend fun get(id: Long): LoopFull? = io { dao.get(id) }
 
     suspend fun create(name: String, topic: String, numbers: List<NumberInput>, firstNote: String = ""): Long = io {
         val now = clock()
