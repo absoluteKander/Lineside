@@ -109,6 +109,16 @@ class ContactSurface(private val ctx: Context) {
             .onFailure { Log.w(TAG, "delete failed", it) }
     }
 
+    /** Every raw contact under Lineside's account. */
+    fun ourRawContactIds(): List<Long> {
+        if (!canRead()) return emptyList()
+        val ids = mutableListOf<Long>()
+        cr.query(RawContacts.CONTENT_URI, arrayOf(RawContacts._ID),
+            "${RawContacts.ACCOUNT_TYPE}=? AND ${RawContacts.DELETED}=0", arrayOf(accountType), null)
+            ?.use { while (it.moveToNext()) ids += it.getLong(0) }
+        return ids
+    }
+
     private fun exists(rawId: Long): Boolean =
         cr.query(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawId), arrayOf(RawContacts.DELETED), null, null, null)
             ?.use { it.moveToFirst() && it.getInt(0) == 0 } ?: false

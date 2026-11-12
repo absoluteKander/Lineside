@@ -10,6 +10,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.telecom.DisconnectCause
 import android.telecom.TelecomManager
 import androidx.core.app.NotificationCompat
@@ -35,6 +36,7 @@ class PostCallActivity : Activity() {
         // Answered if we saw it go off-hook, or if it ended by someone hanging up (not missed or declined).
         val answered = call.answeredAt != null ||
             (call.incoming && (cause == DisconnectCause.LOCAL || cause == DisconnectCause.REMOTE)) || !call.incoming
+        Log.d("Lineside", "post-call cause=$cause answeredAt=${call.answeredAt} incoming=${call.incoming} -> answered=$answered")
         val ended = EndedCall(call, answered, System.currentTimeMillis())
         CallStore.lastEnded = ended
         val locked = ScreeningService.isLocked(this)

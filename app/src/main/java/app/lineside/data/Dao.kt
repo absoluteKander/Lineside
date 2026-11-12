@@ -38,6 +38,11 @@ interface LoopDao {
     @Update suspend fun updateEvent(event: Event)
     @Delete suspend fun deleteEvent(event: Event)
 
+    /** Targeted updates: never write a whole stale Loop row over a concurrent change. */
+    @Query("UPDATE Loop SET rawContactId = :rawId WHERE id = :id") suspend fun setRawContact(id: Long, rawId: Long?)
+    @Query("UPDATE Loop SET keptAt = :at WHERE id = :id") suspend fun setKept(id: Long, at: Long)
+    @Query("SELECT rawContactId FROM Loop WHERE rawContactId IS NOT NULL") suspend fun rawContactIds(): List<Long>
+
     @Query("UPDATE Loop SET lastActivityAt = MAX(lastActivityAt, :at) WHERE id = :loopId")
     suspend fun touch(loopId: Long, at: Long)
 }

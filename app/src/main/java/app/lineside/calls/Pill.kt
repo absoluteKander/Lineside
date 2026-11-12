@@ -196,6 +196,7 @@ object Pill {
 
         runCatching { w.addView(r, lp) }
             .onSuccess {
+                Log.d(TAG, "pill shown")
                 if (onVisible != null) {
                     var fired = false
                     r.viewTreeObserver.addOnDrawListener { if (!fired) { fired = true; r.post(onVisible) } }
@@ -218,6 +219,8 @@ object Pill {
         val w = wm ?: return; val r = root ?: return; val lp = params ?: return; val et = input ?: return
         val imm = app.getSystemService(InputMethodManager::class.java)
         if (expanded && afterCall) { finish(); return }
+        // Closing the card keeps whatever was typed: Done must never throw a note away.
+        if (expanded && et.text.isNotBlank()) submit(app)
         expanded = !expanded
         card?.visibility = if (expanded) View.VISIBLE else View.GONE
         if (expanded) {
@@ -242,6 +245,7 @@ object Pill {
     private fun submit(app: Context) {
         val et = input ?: return
         val text = et.text.toString().trim()
+        Log.d(TAG, "submit len=${text.length} loopId=$loopId afterCall=$afterCall")
         if (text.isEmpty()) return
         et.setText("")
         val c = content ?: return

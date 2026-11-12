@@ -36,6 +36,7 @@ class ScreeningService : CallScreeningService() {
             respondToCall(details, CallResponse.Builder().build()) // allow, change nothing
         }
 
+        Log.d("Lineside", "screen ${if (incoming) "in" else "out"} plan=${plan::class.simpleName} locked=${isLocked(this)} pill=${app.settings.pillEnabled} overlay=${Pill.canShow(this)}")
         val content = when (plan) {
             CallPlan.StayOut -> { CallStore.set(app, null); return }
             is CallPlan.ForLoop -> plan.content
@@ -75,10 +76,12 @@ object CallWatcher {
         if (cb != null) return
         if (app.checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return
         sawActive = false
+        Log.d("Lineside", "watcher starting")
         val startedWatching = System.currentTimeMillis()
         val tm = app.getSystemService(TelephonyManager::class.java)
         val c = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
             override fun onCallStateChanged(state: Int) {
+                Log.d("Lineside", "call state $state")
                 when (state) {
                     TelephonyManager.CALL_STATE_RINGING -> sawActive = true
                     TelephonyManager.CALL_STATE_OFFHOOK -> {
