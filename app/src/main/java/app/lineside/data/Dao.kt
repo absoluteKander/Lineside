@@ -22,6 +22,9 @@ interface LoopDao {
     @Transaction @Query("SELECT * FROM Loop WHERE id = :id")
     suspend fun get(id: Long): LoopFull?
 
+    @Transaction @Query("SELECT * FROM Loop")
+    suspend fun all(): List<LoopFull>
+
     @Query("SELECT DISTINCT loopId FROM LoopNumber WHERE `key` = :key")
     suspend fun loopIdsForKey(key: String): List<Long>
 
@@ -33,6 +36,11 @@ interface LoopDao {
 
     @Insert suspend fun insertNumbers(numbers: List<LoopNumber>)
     @Query("DELETE FROM LoopNumber WHERE loopId = :loopId") suspend fun clearNumbers(loopId: Long)
+    @Query("DELETE FROM LoopNumber WHERE loopId = :loopId AND `key` = :key") suspend fun removeNumber(loopId: Long, key: String)
+    @Query("UPDATE LoopNumber SET label = :label WHERE loopId = :loopId AND `key` = :key") suspend fun setNumberLabel(loopId: Long, key: String, label: String)
+    @Query("SELECT COUNT(*) FROM LoopNumber WHERE loopId = :loopId AND `key` = :key") suspend fun hasNumber(loopId: Long, key: String): Int
+    @Query("DELETE FROM Event WHERE loopId = :loopId AND number = :number AND at = :at AND source = 'CALL'")
+    suspend fun deleteCallEvent(loopId: Long, number: String, at: Long)
 
     @Insert suspend fun insertEvent(event: Event): Long
     @Update suspend fun updateEvent(event: Event)

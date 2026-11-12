@@ -32,6 +32,7 @@ import app.lineside.App
 import app.lineside.data.Event
 import app.lineside.data.EventKind
 import app.lineside.data.NumberInput
+import app.lineside.domain.Initials
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -50,7 +51,13 @@ data class PillContent(
     val context: List<String>,
     /** The single most useful line, for places with room for one (the call notification). */
     val headline: String? = null,
+    /** Who this number is within the loop ("Radiology"), when the loop has several parties. */
+    val party: String? = null,
+    /** Unknown caller: open loops this number could join, most recently active first. */
+    val choices: List<LoopChoice> = emptyList(),
 )
+
+data class LoopChoice(val id: Long, val name: String, val detail: String)
 
 /**
  * The call pill: a small draggable overlay that expands into a card with context and a one-line jot field.
@@ -66,6 +73,8 @@ object Pill {
     private const val TAG = "Lineside"
     const val SECOND_CHANCE_MS = 5_000L
     const val IDLE_MS = 60_000L
+    /** The card was still open when the call ended: give a moment to finish, not a minute. */
+    const val HANGUP_IDLE_MS = 15_000L
 
     private val main = Handler(Looper.getMainLooper())
     private var wm: WindowManager? = null
@@ -78,6 +87,12 @@ object Pill {
     private var input: EditText? = null
     private var notesTv: TextView? = null
     private var closeBtn: Button? = null
+    private var choicesBox: LinearLayout? = null
+    private var addedRow: LinearLayout? = null
+    private var addedTv: TextView? = null
+    private var partyInput: EditText? = null
+    private var associatedAt: Long? = null // loop id this number was just added to (for Undo)
+    private var idleMs = IDLE_MS
 
     private var content: PillContent? = null
     private var loopId: Long? = null
@@ -90,10 +105,18 @@ object Pill {
     private val jotted = mutableListOf<String>()
 
     private val die = Runnable { fadeOut() }
-    private val idle = Runnable { Log.d(TAG, "pill card idle 60s"); finish() }
+    private val idle = Runnable { Log.d(TAG, "pill card idle, closing"); finish() }
     private val safety = Runnable { if (!afterCall) { Log.d(TAG, "no POST_CALL within 3s; removing pill"); removeNow() } }
 
     fun canShow(ctx: Context) = SysSettings.canDrawOverlays(ctx)
+
+    /** A hardware Enter can fire an editor action twice (press and release). Act on the first only. */
+    private var lastAction = 0L
+    private fun once(): Boolean {
+        val now = SystemClock.uptimeMillis()
+        if (now - lastAction < 250) return false
+        lastAction = now; return true
+    }
 
     /** Shows the pill. Synchronous when called on the main thread, so it's on screen before the phone rings. */
     fun show(ctx: Context, c: PillContent, onVisible: (() -> Unit)? = null) {
@@ -133,7 +156,7 @@ object Pill {
             setHintTextColor(0xFF8C98A3.toInt()); setTextColor(0xFFFFFFFF.toInt()); isSingleLine = true
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             imeOptions = EditorInfo.IME_ACTION_DONE or EditorInfo.IME_FLAG_NO_EXTRACT_UI
-            setOnEditorActionListener { _, _, _ -> submit(app); true }
+            setOnEditorActionListener { _, _, _ -> if (once()) submit(app); true }
             addTextChangedListener(object : TextWatcher {
                 override fun afterTextChanged(e: Editable?) = poke()
                 override fun beforeTextChanged(a: CharSequence?, b: Int, c: Int, d: Int) {}
@@ -141,6 +164,33 @@ object Pill {
             })
         }
         notesTv = TextView(app).apply { setTextColor(0xFFC3CCD3.toInt()); setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f) }
+        addedTv = TextView(app).apply { setTextColor(0xFF7FD6D6.toInt()); setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f); typeface = Typeface.DEFAULT_BOLD }
+        val undo = TextView(app).apply {
+            text = "Undo"; setTextColor(0xFFB9C4CC.toInt()); setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
+            minHeight = dp(app, 44f); gravity = Gravity.CENTER_VERTICAL; setPadding(dp(app, 12f), 0, 0, 0)
+            setOnClickListener { undoAssociate(app) }
+        }
+        addedRow = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; visibility = View.GONE
+            addView(addedTv, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)); addView(undo)
+        }
+        partyInput = EditText(app).apply {
+            hint = "Who's on this number? (optional)"; visibility = View.GONE
+            setHintTextColor(0xFF8C98A3.toInt()); setTextColor(0xFFFFFFFF.toInt()); isSingleLine = true
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            imeOptions = EditorInfo.IME_ACTION_NEXT or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+            // A hardware Enter fires this on press and release; act once, then move on to the note field.
+            setOnEditorActionListener { _, id, ev ->
+                Log.d(TAG, "party action id=$id ev=${ev?.action}")
+                if (once()) {
+                    saveParty(app)
+                    input?.let { it.requestFocus(); app.getSystemService(InputMethodManager::class.java).showSoftInput(it, 0) }
+                }
+                true
+            }
+        }
+        choicesBox = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(app, 8f), 0, 0) }
         val done = Button(app).apply { text = "Done"; setOnClickListener { toggle(app) } }
         closeBtn = Button(app).apply { text = "Close loop"; visibility = View.GONE; setOnClickListener { closeLoop(app) } }
         val buttons = LinearLayout(app).apply {
@@ -151,7 +201,7 @@ object Pill {
             orientation = LinearLayout.VERTICAL; visibility = View.GONE
             background = frosted(app, 20f, 0xF2)
             setPadding(dp(app, 14f), dp(app, 12f), dp(app, 14f), dp(app, 8f))
-            addView(titleTv); addView(contextTv); addView(input); addView(notesTv); addView(buttons)
+            addView(titleTv); addView(addedRow); addView(partyInput); addView(contextTv); addView(input); addView(choicesBox); addView(notesTv); addView(buttons)
         }
         val r = LinearLayout(app).apply {
             orientation = LinearLayout.VERTICAL
@@ -213,6 +263,92 @@ object Pill {
         contextTv?.text = c.context.joinToString("\n")
         contextTv?.visibility = if (c.context.isEmpty()) View.GONE else View.VISIBLE
         input?.hint = if (loopId == null) "Who is this? Enter starts a loop" else "Jot a note, Enter saves it"
+        renderChoices(c)
+    }
+
+    /** "Or add to an open loop": the three most recent, then all of them on request. */
+    private fun renderChoices(c: PillContent, all: Boolean = false) {
+        val box = choicesBox ?: return
+        box.removeAllViews()
+        if (loopId != null || c.choices.isEmpty()) { box.visibility = View.GONE; return }
+        box.visibility = View.VISIBLE
+        val app = box.context
+        box.addView(TextView(app).apply {
+            text = "OR ADD TO AN OPEN LOOP"; setTextColor(0xFFB9C4CC.toInt()); setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            typeface = Typeface.DEFAULT_BOLD; letterSpacing = 0.05f; setPadding(0, 0, 0, dp(app, 4f))
+        })
+        val shown = if (all) c.choices else c.choices.take(3)
+        for (ch in shown) box.addView(TextView(app).apply {
+            text = android.text.SpannableStringBuilder().apply {
+                append(ch.name, android.text.style.StyleSpan(Typeface.BOLD), 0)
+                if (ch.detail.isNotBlank()) append("\n").append(ch.detail, android.text.style.ForegroundColorSpan(0xFFB9C4CC.toInt()), 0)
+            }
+            setTextColor(0xFFFFFFFF.toInt()); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            minHeight = dp(app, 52f); gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(app, 8f), dp(app, 6f), dp(app, 8f), dp(app, 6f))
+            background = GradientDrawable().apply { cornerRadius = dp(app, 12f).toFloat(); setColor(0x1F7FD6D6) }
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(app, 4f) }
+            contentDescription = "Add this number to ${ch.name}"
+            setOnClickListener { associate(app.applicationContext, ch) }
+        })
+        if (!all && c.choices.size > 3) box.addView(TextView(app).apply {
+            text = "All open loops (${c.choices.size})"; setTextColor(0xFF7FD6D6.toInt()); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            typeface = Typeface.DEFAULT_BOLD; minHeight = dp(app, 44f); gravity = Gravity.CENTER_VERTICAL
+            setOnClickListener { poke(); renderChoices(c, all = true) }
+        })
+    }
+
+    /** The unknown number joins an existing loop. This call and anything jotted from now on pool into it. */
+    private fun associate(app: Context, ch: LoopChoice) {
+        val c = content ?: return
+        poke()
+        loopId = ch.id; associatedAt = ch.id
+        val ended = afterCall
+        App.of(app).scope.launch {
+            val repo = App.of(app).repo
+            repo.addNumber(ch.id, c.number)
+            CallStore.update(app) { it.copy(loopId = ch.id) }
+            if (ended) CallStore.lastEnded?.takeIf { it.call.number == c.number }?.let { repo.addEvent(it.toEvent(ch.id)) }
+            CallContext.content(app, c.number, ch.id)?.let { fresh ->
+                content = fresh.copy(label = if (afterCall) "+ Add a note" else fresh.label)
+                contextTv?.text = fresh.context.joinToString("\n")
+                contextTv?.visibility = if (fresh.context.isEmpty()) View.GONE else View.VISIBLE
+            }
+        }
+        titleTv?.text = ch.name
+        addedTv?.text = "Added ${c.number} to this loop"
+        addedRow?.visibility = View.VISIBLE
+        partyInput?.visibility = View.VISIBLE
+        choicesBox?.visibility = View.GONE
+        input?.hint = "Jot a note, Enter saves it"
+        pillTv?.text = "${Initials.of(ch.name)} · ${ch.name}"
+        partyInput?.requestFocus()
+    }
+
+    private fun undoAssociate(app: Context) {
+        val id = associatedAt ?: return
+        val c = content ?: return
+        val startedAt = CallStore.lastEnded?.takeIf { afterCall && it.call.number == c.number }?.call?.startedAt
+        App.of(app).scope.launch {
+            App.of(app).repo.removeNumber(id, c.number, startedAt)
+            CallStore.update(app) { it.copy(loopId = null) }
+            CallContext.content(app, c.number, null)?.let { fresh ->
+                loopId = null; associatedAt = null
+                addedRow?.visibility = View.GONE; partyInput?.visibility = View.GONE; partyInput?.setText("")
+                apply(fresh.copy(label = if (afterCall) "+ Who was this?" else fresh.label))
+                input?.requestFocus()
+            }
+        }
+    }
+
+    private fun saveParty(app: Context) {
+        val id = loopId?.takeIf { it > 0 } ?: return
+        val label = partyInput?.text?.toString()?.trim().orEmpty()
+        val c = content ?: return
+        if (label.isEmpty()) return
+        App.of(app).scope.launch { App.of(app).repo.setNumberLabel(id, c.number, label) }
+        val base = pillTv?.text?.toString()?.substringBefore(" · $label").orEmpty()
+        pillTv?.text = "$base · $label"
     }
 
     private fun toggle(app: Context) {
@@ -306,14 +442,20 @@ object Pill {
         if (root == null) showOnMain(app, c.copy(label = label), null) else apply(c.copy(label = label))
         afterCall = true
         closeBtn?.visibility = if (loopId != null && loopId!! > 0) View.VISIBLE else View.GONE
-        if (expanded) { touched = true; poke(); return@post } // mid-jot when they hung up: keep it open
+        if (expanded) {
+            // Mid-jot when they hung up: keep it open briefly to finish, and say nothing will be lost.
+            touched = true; idleMs = HANGUP_IDLE_MS; poke()
+            notesTv?.text = listOfNotNull(notesTv?.text?.toString()?.ifBlank { null }, "Closes shortly. Your note is kept.").joinToString("\n")
+            return@post
+        }
+        idleMs = IDLE_MS
         touched = false
         main.removeCallbacks(die); main.postDelayed(die, SECOND_CHANCE_MS)
     }
 
     private fun poke() {
         if (!afterCall || !touched) return
-        main.removeCallbacks(idle); main.postDelayed(idle, IDLE_MS)
+        main.removeCallbacks(idle); main.postDelayed(idle, idleMs)
     }
 
     /**
@@ -325,6 +467,7 @@ object Pill {
         val app = r.context.applicationContext
         val c = content
         val pending = input?.text?.toString()?.trim().orEmpty()
+        if (partyInput?.visibility == View.VISIBLE && !partyInput?.text.isNullOrBlank()) saveParty(app)
         if (afterCall && touched && loopId == null && c != null) {
             val name = pending.ifEmpty { "Unnamed caller " + SimpleDateFormat("MMM d", Locale.getDefault()).format(Date()) }
             App.of(app).scope.launch {
@@ -354,6 +497,7 @@ object Pill {
         input?.let { r.context.getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(it.windowToken, 0) }
         runCatching { wm?.removeView(r) }
         root = null; card = null; pillTv = null; input = null; notesTv = null; titleTv = null; contextTv = null; closeBtn = null
+        choicesBox = null; addedRow = null; addedTv = null; partyInput = null; associatedAt = null; idleMs = IDLE_MS
         afterCall = false; touched = false; expanded = false; closeArmed = false; content = null; loopId = null
     }
 }

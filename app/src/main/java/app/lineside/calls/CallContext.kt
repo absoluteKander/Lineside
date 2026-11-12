@@ -33,12 +33,14 @@ object CallContext {
             return content(ctx, number, loopId)?.let { CallPlan.ForLoop(loopId, it) } ?: CallPlan.StayOut
         }
         if (app.contacts.isPermanentContact(number)) return CallPlan.StayOut
-        return CallPlan.Unknown(unknown(number))
+        return CallPlan.Unknown(unknown(ctx, number))
     }
 
     suspend fun content(ctx: Context, number: String, loopId: Long?): PillContent? {
-        if (loopId == null) return unknown(number)
+        if (loopId == null) return unknown(ctx, number)
         val full = App.of(ctx).repo.get(loopId) ?: return null
+        // Several parties in this loop: say which one this number is.
+        val party = full.numbers.takeIf { it.size > 1 }?.firstOrNull { app.lineside.data.NumberKey.matches(it.number, number) }?.label?.ifBlank { null }
         val now = System.currentTimeMillis()
         val lines = mutableListOf<String>()
         val hi = LoopStatus.highlight(full.events)
@@ -49,10 +51,19 @@ object CallContext {
         if (full.loop.topic.isNotBlank()) lines.add(0, full.loop.topic)
         val status = LoopStatus.statusLine(full.events, now, full.loop.topic, full.loop.createdAt)
         val headline = hi?.let { line(it.kind, it.text, now - it.at) } ?: full.loop.topic.ifBlank { null }
-        return PillContent(loopId, number, full.loop.name, "${Initials.of(full.loop.name)} · $status", lines, headline)
+        val label = listOfNotNull(Initials.of(full.loop.name), party, status).joinToString(" · ")
+        val title = if (party != null) "${full.loop.name} · $party" else full.loop.name
+        return PillContent(loopId, number, title, label, lines, headline, party = party)
     }
 
-    private fun unknown(number: String) = PillContent(null, number, number, "+ Start a loop", emptyList())
+    private suspend fun unknown(ctx: Context, number: String): PillContent {
+        val open = App.of(ctx).repo.openLoops()
+        val choices = open.map { f ->
+            val ball = if (LoopStatus.ball(f.events) == app.lineside.domain.Ball.CALL_BACK) "Call back" else "Waiting"
+            LoopChoice(f.loop.id, f.loop.name, listOf(f.loop.topic, ball).filter { it.isNotBlank() }.joinToString(" · "))
+        }
+        return PillContent(null, number, number, "+ Start a loop", emptyList(), choices = choices)
+    }
 
     private fun line(kind: EventKind, text: String, ago: Long): String {
         val what = when (kind) {

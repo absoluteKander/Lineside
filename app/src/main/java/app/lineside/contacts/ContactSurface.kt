@@ -94,12 +94,14 @@ class ContactSurface(private val ctx: Context) {
                 .withValue(StructuredName.DISPLAY_NAME, full.loop.name).build(),
         )
         // The phone app shows the number's custom label under the name: that's our status line.
+        // With several parties in one loop, each number's label says which party is calling: "Radiology · Waiting · …".
+        val multi = full.numbers.size > 1
         for (n in full.numbers) ops += ContentProviderOperation.newInsert(Data.CONTENT_URI)
             .withValue(Data.RAW_CONTACT_ID, rawId)
             .withValue(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE)
             .withValue(Phone.NUMBER, n.number)
             .withValue(Phone.TYPE, Phone.TYPE_CUSTOM)
-            .withValue(Phone.LABEL, status).build()
+            .withValue(Phone.LABEL, if (multi && n.label.isNotBlank()) "${n.label.take(16)} · $status" else status).build()
         cr.applyBatch(ContactsContract.AUTHORITY, ops)
     }
 

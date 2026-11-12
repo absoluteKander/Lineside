@@ -42,6 +42,33 @@ class LoopRepo(private val db: Db, private val contacts: ContactSurface, private
         resync(id)
     }
 
+    /** A new number joins a loop (another office, a department, a contractor). Its calls pool into the loop. */
+    suspend fun addNumber(loopId: Long, number: String, label: String = "") = io {
+        val key = NumberKey.of(number)
+        if (key.isNotEmpty() && dao.hasNumber(loopId, key) == 0) {
+            dao.insertNumbers(listOf(LoopNumber(loopId = loopId, number = number.trim(), key = key, label = label.trim())))
+            resync(loopId)
+        }
+    }
+
+    /** Undo of [addNumber]. Also removes this call's entry if it was already logged to the loop. */
+    suspend fun removeNumber(loopId: Long, number: String, callStartedAt: Long? = null) = io {
+        dao.removeNumber(loopId, NumberKey.of(number))
+        callStartedAt?.let { dao.deleteCallEvent(loopId, number, it) }
+        resync(loopId)
+    }
+
+    /** Open (not quiet) loops, most recently active first: the choices for "add to an open loop". */
+    suspend fun openLoops(now: Long = clock()): List<LoopFull> = io {
+        dao.all().filter { !app.lineside.domain.LoopStatus.isQuiet(it.loop, now) }.sortedByDescending { it.loop.lastActivityAt }
+    }
+
+    /** "Who's on this number?" e.g. "Radiology". Shown on the call screen and in the timeline. */
+    suspend fun setNumberLabel(loopId: Long, number: String, label: String) = io {
+        dao.setNumberLabel(loopId, NumberKey.of(number), label.trim())
+        resync(loopId)
+    }
+
     suspend fun addEvent(event: Event): Long = io {
         val eid = dao.insertEvent(event.copy(text = event.text.trim()))
         android.util.Log.d("Lineside", "event saved id=$eid loop=${event.loopId} kind=${event.kind}")
