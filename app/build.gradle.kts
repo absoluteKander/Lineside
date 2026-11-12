@@ -6,11 +6,13 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
+    id("androidx.room")
 }
 
-ksp {
-    // Committed so database migrations can be checked against the real schema.
-    arg("room.schemaLocation", "$projectDir/schemas")
+room {
+    // Committed so database migrations can be checked against the real schema. The Room plugin
+    // writes it safely even when both builds compile at once.
+    schemaDirectory("$projectDir/schemas")
 }
 
 android {
@@ -22,6 +24,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // Two builds from one codebase. Play policy only allows reading SMS for the default SMS app,
@@ -39,8 +42,15 @@ android {
     }
 
     buildTypes {
-        debug { applicationIdSuffix = ".debug" }
-        release { isMinifyEnabled = false }
+        // Each installed copy needs its own account type, or debug and release builds would fight over it.
+        debug {
+            applicationIdSuffix = ".debug"
+            resValue("string", "account_type", "app.lineside.debug.loops")
+        }
+        release {
+            isMinifyEnabled = false
+            resValue("string", "account_type", "app.lineside.loops")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -65,8 +75,12 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.1")
     implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.room:room-ktx:2.7.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     ksp("androidx.room:room-compiler:2.7.2")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.room:room-testing:2.7.2")
 }
 
 // Guard: Lineside must never be able to reach the internet. Fails the build if any
