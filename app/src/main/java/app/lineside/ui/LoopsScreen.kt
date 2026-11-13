@@ -110,7 +110,8 @@ private fun Header(callBack: Int, waiting: Int, onSettings: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Sign("Lineside", 34.sp, c.headerInk, Modifier.weight(1f).semantics { heading() })
+            Wordmark(c.headerInk, c.header, Modifier.semantics { heading() })
+            Spacer(Modifier.weight(1f))
             IconButton(onClick = onSettings) { Icon(LineIcons.Settings, "Settings", tint = c.headerMuted) }
         }
         if (callBack + waiting > 0) Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {

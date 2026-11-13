@@ -4,6 +4,9 @@
 package app.lineside.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -215,4 +218,29 @@ fun TerminusGlyph(ink: Color) = Canvas(Modifier.size(width = 20.dp, height = 14.
     val y = size.height / 2; val w = 3.dp.toPx()
     drawLine(ink, Offset(0f, y), Offset(size.width - w, y), strokeWidth = w)
     drawLine(ink, Offset(size.width - w / 2, 0f), Offset(size.width - w / 2, size.height), strokeWidth = w)
+}
+
+/**
+ * The Lineside wordmark: the name in signage type riding on its own line. The line leaves a hollow station stop,
+ * runs under the word and a little past it, and ends in an arrowhead: the line carries on.
+ * Not amber: amber is only ever "needs you".
+ */
+@Composable
+fun Wordmark(ink: Color, hole: Color, modifier: Modifier = Modifier, size: TextUnit = 34.sp) {
+    Column(modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max).semantics(mergeDescendants = true) {}) {
+        Sign("Lineside", size, ink, Modifier.padding(start = 3.dp, end = 26.dp))
+        // Caps leave the font's descender space empty: tuck the line up under the letters.
+        Canvas(Modifier.fillMaxWidth().height(18.dp).offset(y = (-5).dp)) {
+            val y = this.size.height / 2
+            val stroke = 6.dp.toPx()
+            val r = 7.dp.toPx()
+            val head = 18.dp.toPx()
+            val cx = r + stroke / 2
+            drawLine(ink, Offset(cx, y), Offset(this.size.width - head + 1f, y), strokeWidth = stroke)
+            val tip = this.size.width
+            drawPath(Path().apply { moveTo(tip, y); lineTo(tip - head, y - head * 0.5f); lineTo(tip - head, y + head * 0.5f); close() }, ink)
+            drawCircle(hole, r, Offset(cx, y))
+            drawCircle(ink, r, Offset(cx, y), style = Stroke(stroke * 0.8f))
+        }
+    }
 }
