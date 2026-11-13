@@ -170,6 +170,8 @@ class MainActivity : ComponentActivity() {
                 quietNudge = nudgeOn,
                 onQuietNudge = { nudgeOn = it; settings.quietNudge = it },
                 onAllow = allow,
+                theme = themeMode.value,
+                onTheme = { themeMode.value = it; settings.themeMode = it },
             )
 
             is LoopView -> {
@@ -226,7 +228,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         openEvent?.let { e ->
-            EventSheet(e, onDismiss = { onEvent(null) }, onDelete = { scope.launch { repo.deleteEvent(e) }; onEvent(null) })
+            EventSheet(full, e, onDismiss = { onEvent(null) }, onDelete = { scope.launch { repo.deleteEvent(e) }; onEvent(null) })
         }
     }
 }

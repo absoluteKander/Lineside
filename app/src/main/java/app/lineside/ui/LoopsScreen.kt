@@ -149,7 +149,7 @@ private fun LoopCard(full: LoopFull, now: Long, onClick: () -> Unit) {
             Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
                 Text(loop.name, fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 24.sp,
                     color = c.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                val sub = loop.topic.ifBlank { full.numbers.firstOrNull()?.number.orEmpty() }
+                val sub = loop.topic.ifBlank { full.numbers.firstOrNull()?.number?.let(Fmt::phone).orEmpty() }
                 if (sub.isNotBlank()) Text(sub, fontSize = 13.sp, color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Lamp(LoopStatus.ball(full.events))

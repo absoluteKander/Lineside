@@ -127,7 +127,10 @@ class LoopRepo(private val db: Db, private val contacts: ContactSurface, private
     private fun clean(loopId: Long, numbers: List<NumberInput>) = numbers
         .filter { NumberKey.of(it.number).isNotEmpty() }
         .distinctBy { NumberKey.of(it.number) }
-        .map { LoopNumber(loopId = loopId, number = it.number.trim(), key = NumberKey.of(it.number), label = it.label.trim()) }
+        // Stored plain (digits and a leading +): the editor shows numbers formatted, and every screen formats them again.
+        .map { LoopNumber(loopId = loopId, number = plain(it.number), key = NumberKey.of(it.number), label = it.label.trim()) }
+
+    private fun plain(n: String) = n.trim().let { t -> (if (t.startsWith("+")) "+" else "") + t.filter(Char::isDigit) }
 
     private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
 }

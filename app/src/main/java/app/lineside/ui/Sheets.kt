@@ -67,7 +67,7 @@ import app.lineside.data.LoopNumber
 
 /** Every sheet opens on the loop's signage band: its route bullet, its name, and what you're doing. */
 @Composable
-private fun SheetBand(loop: Loop, action: String) {
+internal fun SheetBand(loop: Loop, action: String) {
     val c = Line.c
     Row(
         Modifier.fillMaxWidth().background(c.header).padding(horizontal = 16.dp, vertical = 14.dp),
@@ -82,7 +82,7 @@ private fun SheetBand(loop: Loop, action: String) {
 }
 
 @Composable
-private fun LineSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+internal fun LineSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
     val c = Line.c
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -95,17 +95,23 @@ private fun LineSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
 
 /** A labelled text area: a white plate with a signage label, the loop's colour as its underline. */
 @Composable
-private fun PlateField(label: String, value: String, onChange: (String) -> Unit, lineColor: Color, placeholder: String, minHeight: Int, focus: FocusRequester? = null) {
+internal fun PlateField(
+    label: String, value: String, onChange: (String) -> Unit, lineColor: Color, placeholder: String, minHeight: Int,
+    focus: FocusRequester? = null, singleLine: Boolean = false,
+    keyboard: KeyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+    textStyle: TextStyle = TextStyle(fontSize = 16.sp, lineHeight = 22.sp),
+) {
     val c = Line.c
     Column(Modifier.fillMaxWidth().background(c.surface, RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Sign(label, 13.sp, c.muted)
         BasicTextField(
             value, onChange,
             Modifier.fillMaxWidth().heightIn(min = minHeight.dp).let { if (focus != null) it.focusRequester(focus) else it },
-            textStyle = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, color = c.ink),
+            textStyle = textStyle.merge(TextStyle(color = c.ink)),
             cursorBrush = SolidColor(c.amber),
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            decorationBox = { inner -> Box { if (value.isEmpty()) Text(placeholder, fontSize = 16.sp, color = c.muted); inner() } },
+            singleLine = singleLine,
+            keyboardOptions = keyboard,
+            decorationBox = { inner -> Box { if (value.isEmpty()) Text(placeholder, style = textStyle.merge(TextStyle(color = c.muted))); inner() } },
         )
         Box(Modifier.fillMaxWidth().height(2.dp).background(lineColor))
     }
@@ -246,7 +252,7 @@ private fun WhenLine(selected: Long, lineColor: Color, onPick: (Long) -> Unit) {
 
 /** A hollow pill choice that fills amber when chosen. */
 @Composable
-private fun Pill(label: String, chosen: Boolean, onClick: () -> Unit) {
+internal fun Pill(label: String, chosen: Boolean, onClick: () -> Unit) {
     val c = Line.c
     Box(
         Modifier.heightIn(min = 40.dp)
