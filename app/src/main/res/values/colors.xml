@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The signal band behind the launcher icon's line; matches the artwork's plate. -->
+    <color name="ic_launcher_background">#171E25</color>
+</resources>
