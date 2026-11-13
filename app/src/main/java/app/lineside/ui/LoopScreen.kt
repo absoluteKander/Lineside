@@ -213,7 +213,7 @@ private fun NameNumberDialog(number: String, onDismiss: () -> Unit, onSave: (Str
     var name by rememberSaveable { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Who's on ${Fmt.phone(number)}?", fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 22.sp) },
+        title = { Text("Who is calling from ${Fmt.phone(number)}?", fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 22.sp) },
         text = {
             androidx.compose.material3.OutlinedTextField(
                 name, { name = it }, singleLine = true, placeholder = { Text("Front desk, Radiology, Billing…") },
@@ -232,7 +232,7 @@ private fun NameChip(onClick: () -> Unit) {
     Row(
         Modifier.border(1.5.dp, c.muted, RoundedCornerShape(6.dp)).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 6.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-    ) { Sign("+ Name this number", 12.sp, c.muted) }
+    ) { Sign("+ Name this caller", 12.sp, c.muted) }
 }
 
 private fun eventsOf(item: TimelineItem): List<Event> = when (item) {
