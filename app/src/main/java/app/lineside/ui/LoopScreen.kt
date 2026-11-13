@@ -1,17 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Absolute Candor
 
+@file:OptIn(ExperimentalFoundationApi::class)
+
 package app.lineside.ui
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,29 +29,41 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,19 +77,18 @@ import app.lineside.domain.LoopStatus
 import app.lineside.domain.Timeline
 import app.lineside.domain.TimelineItem
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.launch
 
-/** Who a number belongs to within a loop, for loops that have gathered several parties. */
+/** Who a number is within a loop, for loops that have gathered several parties. */
 private class Parties(numbers: List<LoopNumber>) {
     private val ordered = numbers.sortedBy { it.id }
     val multi = ordered.size > 1
-    fun of(number: String?): Pair<String, Color>? {
+    fun of(number: String?): String? {
         if (!multi || number == null) return null
-        val i = ordered.indexOfFirst { NumberKey.matches(it.number, number) }
-        if (i < 0) return number to Brand.Muted
-        val n = ordered[i]
-        return n.label.ifBlank { n.number } to Brand.avatars[i % Brand.avatars.size]
+        val n = ordered.firstOrNull { NumberKey.matches(it.number, number) } ?: return number
+        return n.label.ifBlank { n.number }
     }
-    fun color(n: LoopNumber) = Brand.avatars[ordered.indexOf(n).coerceAtLeast(0) % Brand.avatars.size]
 }
 
 @Composable
@@ -84,212 +103,307 @@ fun LoopScreen(
     onClose: () -> Unit,
     onEventClick: (Event) -> Unit,
 ) {
+    val c = Line.c
     val loop = full.loop
+    val lineColor = Brand.loop(loop.id, c.dark)
     val parties = Parties(full.numbers)
-    val days = Timeline.group(full.events)
-    LazyColumn(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        item { Header(full, parties, now, onBack, onEdit, onCall, onNote, onLog, onClose) }
-        if (days.isEmpty()) item {
-            Text("Nothing yet. Calls, voicemails, texts and your notes will show up here, grouped by day.",
-                Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        items(days, key = { it.date.toEpochDay() }) { day -> DaySection(day, parties, onEventClick) }
-        item { Box(Modifier.height(32.dp)) }
-    }
-}
+    val days = remember(full.events) { Timeline.group(full.events) }
+    val stops = remember(full.events) { TimelineLayout.stops(full.events) }
+    val needs = needsYouEvent(full.events)
+    val scope = rememberCoroutineScope()
+    // Opening a loop always lands on the latest: fresh list position and lens every time.
+    val list = remember(loop.id) { LazyListState() }
+    var selectedId by remember(loop.id) { mutableStateOf<Long?>(null) }
+    var latestKey by remember(loop.id) { mutableIntStateOf(0) }
+    var pickNumber by remember { mutableStateOf(false) }
 
-@Composable
-private fun Header(
-    full: LoopFull, parties: Parties, now: Long, onBack: () -> Unit, onEdit: () -> Unit, onCall: (String) -> Unit,
-    onNote: () -> Unit, onLog: () -> Unit, onClose: () -> Unit,
-) {
-    val loop = full.loop
-    Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp) {
-        Column(Modifier.statusBarsPadding().padding(start = 8.dp, end = 16.dp, top = 4.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconButton(onClick = onBack) { Icon(LineIcons.Back, "Back") }
-                Avatar(loop.id, loop.name, 44.dp)
-                Column(Modifier.weight(1f).padding(start = 2.dp)) {
-                    Text(loop.name, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
-                    if (loop.topic.isNotBlank()) Text(loop.topic, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    // List layout: [stations] then per day: [plate] [items...]. Map each event to the row that shows it.
+    val rowOfEvent = remember(days) {
+        val m = mutableMapOf<Long, Int>(); var i = 1
+        for (d in days) { i++; for (it in d.items) { eventsOf(it).forEach { e -> m[e.id] = i }; i++ } }
+        m
+    }
+    val dayOfRow = remember(days) {
+        val m = mutableListOf<LocalDate?>(days.firstOrNull()?.date)
+        for (d in days) { m += d.date; d.items.forEach { _ -> m += d.date } }
+        m
+    }
+    val hereDay by remember(days) { derivedStateOf { dayOfRow.getOrNull(list.firstVisibleItemIndex) } }
+    val plateHeight = with(LocalDensity.current) { 46.dp.roundToPx() }
+
+    Column(Modifier.fillMaxSize().background(c.ground)) {
+        Column(Modifier.fillMaxWidth().background(c.header).statusBarsPadding().padding(start = 4.dp, end = 4.dp, bottom = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(LineIcons.Back, "Back", tint = c.headerInk) }
+                RouteBullet(loop.id, loop.name, 34.dp)
+                Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                    Text(loop.name, fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 25.sp,
+                        color = c.headerInk, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
+                    if (loop.topic.isNotBlank()) Text(loop.topic, fontSize = 12.sp, color = c.headerMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                BallChip(LoopStatus.ball(full.events))
-                IconButton(onClick = onEdit) { Icon(LineIcons.Edit, "Edit loop") }
+                Lamp(LoopStatus.ball(full.events), onDark = true)
+                IconButton(onClick = onEdit) { Icon(LineIcons.Edit, "Edit loop", tint = c.headerMuted) }
             }
-            if (full.numbers.isNotEmpty()) Column(Modifier.padding(start = 8.dp)) {
+            Box(Modifier.padding(horizontal = 12.dp)) {
+                TimelineMap(stops, lineColor, needs?.id, selectedId, if (list.firstVisibleItemIndex == 0) null else hereDay, latestKey) { e ->
+                    selectedId = e.id
+                    rowOfEvent[e.id]?.let { row -> scope.launch { list.animateScrollToItem(row, -plateHeight) } }
+                }
+            }
+        }
+
+        LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(bottom = 40.dp)) {
+            item {
+                Stations(
+                    lineColor,
+                    onCall = { if (full.numbers.size > 1) pickNumber = true else full.numbers.firstOrNull()?.let { onCall(it.number) } },
+                    callEnabled = full.numbers.isNotEmpty(), onNote = onNote, onLog = onLog, onClose = onClose,
+                )
+            }
+            if (days.isEmpty()) item {
+                Text("No waypoints yet. Calls, voicemails, texts and your notes will appear here, newest first.",
+                    Modifier.padding(20.dp), color = c.muted, lineHeight = 20.sp)
+            }
+            days.forEachIndexed { di, day ->
+                stickyHeader(key = "d" + day.date.toEpochDay()) {
+                    val pinnedOld = hereDay == day.date && di > 0 && list.firstVisibleItemIndex > 0
+                    DayPlate(day, showLatest = pinnedOld) {
+                        selectedId = null
+                        scope.launch { list.animateScrollToItem(0) }
+                        latestKey++
+                    }
+                }
+                day.items.forEachIndexed { ii, item ->
+                    val last = di == days.lastIndex && ii == day.items.lastIndex
+                    item(key = "e" + eventsOf(item).first().id) {
+                        Waypoint(item, parties, lineColor, needs?.id, selectedId, last, onEventClick)
+                    }
+                }
+            }
+        }
+    }
+
+    if (pickNumber) AlertDialog(
+        onDismissRequest = { pickNumber = false },
+        title = { Text("Call which number?", fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 22.sp) },
+        text = {
+            Column {
                 for (n in full.numbers.sortedBy { it.id }) Row(
-                    Modifier.fillMaxWidth().clickable { onCall(n.number) }.heightIn(min = 32.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { pickNumber = false; onCall(n.number) },
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (parties.multi) Box(Modifier.size(8.dp).background(parties.color(n), CircleShape))
-                    if (n.label.isNotBlank()) Text(n.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    Text(n.number, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(n.label.ifBlank { "Number" }, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                    MonoLabel(n.number, size = 13.sp)
                 }
             }
-            Text("Shows on the call screen as: ${LoopStatus.statusLine(full.events, now, loop.topic, loop.createdAt)}",
-                Modifier.padding(start = 8.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(Modifier.padding(start = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val first = full.numbers.minByOrNull { it.id }?.number
-                ActionTile("Call", LineIcons.Phone, Modifier.weight(1f), filled = true, enabled = first != null) { first?.let(onCall) }
-                ActionTile("Note", LineIcons.Note, Modifier.weight(1f), onClick = onNote)
-                ActionTile("Log", LineIcons.Log, Modifier.weight(1f), onClick = onLog)
-                ActionTile("Close loop", LineIcons.Done, Modifier.weight(1f), onClick = onClose)
-            }
-        }
-    }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = { pickNumber = false }) { Text("Cancel") } },
+    )
 }
+
+private fun eventsOf(item: TimelineItem): List<Event> = when (item) {
+    is TimelineItem.Call -> listOf(item.call) + item.attached
+    is TimelineItem.Texts -> item.texts
+    is TimelineItem.Single -> listOf(item.event)
+}
+
+// ---- Stations: the four actions, as stops on a short stretch of the loop's line, ending at the terminus. ----
+
+private enum class StationShape { CIRCLE, DIAMOND, SQUIRCLE, TERMINUS }
 
 @Composable
-private fun ActionTile(label: String, icon: ImageVector, modifier: Modifier, filled: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
-    val bg = if (filled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
-    val fg = if (filled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-    Surface(
-        onClick = onClick, enabled = enabled, modifier = modifier.height(56.dp), shape = RoundedCornerShape(14.dp), color = bg, contentColor = fg,
-        border = if (filled) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(icon, null, Modifier.size(18.dp))
-            Text(label, fontSize = 12.sp, fontWeight = if (filled) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1)
+private fun Stations(lineColor: Color, onCall: () -> Unit, callEnabled: Boolean, onNote: () -> Unit, onLog: () -> Unit, onClose: () -> Unit) {
+    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(48.dp)) {
+            // The line runs in from the left and ends at the terminus (the centre of the last column).
+            val end = size.width * 7f / 8f
+            drawLine(lineColor, Offset(0f, size.height / 2), Offset(end, size.height / 2), strokeWidth = 5.dp.toPx())
+        }
+        Row(Modifier.fillMaxWidth()) {
+            Station("Call", StationShape.CIRCLE, LineIcons.Phone, lineColor, Modifier.weight(1f), callEnabled, onCall)
+            Station("Note", StationShape.DIAMOND, LineIcons.Note, lineColor, Modifier.weight(1f), true, onNote)
+            Station("Log", StationShape.SQUIRCLE, LineIcons.Log, lineColor, Modifier.weight(1f), true, onLog)
+            Station("Close loop", StationShape.TERMINUS, null, lineColor, Modifier.weight(1f), true, onClose)
         }
     }
 }
 
-private fun dayLabel(date: LocalDate): String {
+/** Hollow in the loop's colour; fills amber while pressed. The shape is the shape of what it creates. */
+@Composable
+private fun Station(label: String, shape: StationShape, icon: ImageVector?, lineColor: Color, modifier: Modifier, enabled: Boolean, onClick: () -> Unit) {
+    val c = Line.c
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val fill = if (pressed) c.amber else c.ground
+    val edge = if (pressed) c.amber else if (enabled) lineColor else c.muted
+    Column(
+        modifier.clickable(interactionSource = source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.size(48.dp)) {
+                val w = 4.dp.toPx()
+                when (shape) {
+                    StationShape.CIRCLE -> { drawCircle(fill, size.minDimension / 2); drawCircle(edge, size.minDimension / 2 - w / 2, style = Stroke(w)) }
+                    StationShape.SQUIRCLE -> {
+                        drawRoundRect(fill, cornerRadius = CornerRadius(15.dp.toPx()))
+                        drawRoundRect(edge, Offset(w / 2, w / 2), Size(size.width - w, size.height - w), CornerRadius(13.dp.toPx()), style = Stroke(w))
+                    }
+                    StationShape.DIAMOND -> {
+                        val r = size.minDimension / 2 - w / 2; val m = center
+                        val p = Path().apply { moveTo(m.x, m.y - r); lineTo(m.x + r, m.y); lineTo(m.x, m.y + r); lineTo(m.x - r, m.y); close() }
+                        drawPath(p, fill); drawPath(p, edge, style = Stroke(w, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                    }
+                    StationShape.TERMINUS -> {
+                        val bw = 16.dp.toPx(); val l = (size.width - bw) / 2
+                        drawRoundRect(fill, Offset(l, 0f), Size(bw, size.height), CornerRadius(4.dp.toPx()))
+                        drawRoundRect(edge, Offset(l + w / 2, w / 2), Size(bw - w, size.height - w), CornerRadius(3.dp.toPx()), style = Stroke(w))
+                    }
+                }
+            }
+            if (icon != null) Icon(icon, null, Modifier.size(20.dp), tint = if (enabled) c.ink else c.muted)
+        }
+        Sign(label, 15.sp, if (enabled) c.ink else c.muted)
+    }
+}
+
+// ---- Waypoints ----
+
+private fun plateLabel(date: LocalDate): String {
     val today = LocalDate.now()
     val base = Fmt.day(date)
-    return when (date) {
-        today -> "Today · $base"
-        today.minusDays(1) -> "Yesterday · $base"
-        else -> base
+    val ago = ChronoUnit.DAYS.between(date, today)
+    return when (ago) {
+        0L -> "Today · $base"
+        1L -> "Yesterday · $base"
+        else -> "$base · $ago days ago"
     }
 }
 
+/** A day's name plate. It sits across the line; when you've scrolled back in time it offers "↑ Latest". */
 @Composable
-private fun DaySection(day: Day, parties: Parties, onEventClick: (Event) -> Unit) {
-    Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.Bottom) {
-            Text(dayLabel(day.date).uppercase(), Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.7.sp, color = Brand.Body)
-            Text(day.counts, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        ) {
-            Column(Modifier.padding(vertical = 4.dp)) {
-                day.items.forEachIndexed { i, item ->
-                    if (i > 0) HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = Brand.Ground)
-                    when (item) {
-                        is TimelineItem.Call -> CallRow(item, parties, onEventClick)
-                        is TimelineItem.Texts -> TextsRow(item, parties, onEventClick)
-                        is TimelineItem.Single -> SingleRow(item.event, parties, onEventClick)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Bubble(kind: EventKind) {
-    val (bg, fg) = Fmt.tint(kind)
-    Box(Modifier.size(28.dp).background(bg, CircleShape), contentAlignment = Alignment.Center) {
-        Icon(Fmt.icon(kind), null, tint = fg, modifier = Modifier.size(14.dp))
-    }
-}
-
-@Composable
-private fun PartyLine(party: Pair<String, Color>?) {
-    party ?: return
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Box(Modifier.size(6.dp).background(party.second, CircleShape))
-        Text(party.first, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = party.second)
-    }
-}
-
-@Composable
-private fun CallRow(item: TimelineItem.Call, parties: Parties, onEventClick: (Event) -> Unit) {
-    val c = item.call
-    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth().clickable { onEventClick(c) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Bubble(c.kind)
-            Column(Modifier.weight(1f)) {
-                Text(Fmt.kind(c.kind), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                PartyLine(parties.of(c.number))
-            }
-            Text(Fmt.time(c.at) + (c.durationSec?.let { " · " + Fmt.duration(it) } ?: ""), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        if (item.attached.isNotEmpty()) {
-            val rule = if (c.kind == EventKind.MISSED) Brand.AmberWash else Brand.TealWash
-            Row(Modifier.padding(start = 13.dp).height(IntrinsicSize.Min)) {
-                Box(Modifier.width(2.dp).fillMaxHeight().background(rule))
-                Column(Modifier.padding(start = 23.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (a in item.attached) Box(Modifier.clickable { onEventClick(a) }) {
-                        if (a.kind == EventKind.VOICEMAIL) VoicemailBlock(a, "Left a voicemail") else StampedNote(a)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StampedNote(e: Event) = Text(
-    buildAnnotatedString {
-        e.callOffsetSec?.let { withStyle(SpanStyle(color = Brand.Teal, fontWeight = FontWeight.SemiBold)) { append(Fmt.duration(it)) }; append("  ") }
-        append(e.text)
-    },
-    fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurface,
-)
-
-@Composable
-private fun VoicemailBlock(e: Event, title: String) = Column(
-    Modifier.fillMaxWidth().background(Color(0xFFFBF7EF), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
-    verticalArrangement = Arrangement.spacedBy(4.dp),
-) {
-    Text(title + (e.durationSec?.let { " · " + Fmt.duration(it) } ?: ""), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Brand.AmberInk)
-    if (e.text.isNotBlank()) Text("\"${e.text}\"", fontSize = 13.sp, lineHeight = 19.sp, color = Brand.Body)
-}
-
-@Composable
-private fun SingleRow(e: Event, parties: Parties, onEventClick: (Event) -> Unit) =
-    Row(Modifier.fillMaxWidth().clickable { onEventClick(e) }.padding(horizontal = 14.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Bubble(e.kind)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (e.kind == EventKind.VOICEMAIL) {
-                PartyLine(parties.of(e.number))
-                VoicemailBlock(e, "Voicemail · " + Fmt.time(e.at))
-            } else {
-                Text("${Fmt.kind(e.kind)} · ${Fmt.time(e.at)}" + (if (e.callOffsetSec != null) " · during a call" else ""),
-                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (e.text.isNotBlank()) Text(e.text, fontSize = 13.sp, lineHeight = 19.sp)
-            }
-        }
-    }
-
-@Composable
-private fun TextsRow(item: TimelineItem.Texts, parties: Parties, onEventClick: (Event) -> Unit) {
-    var open by rememberSaveable(item.at) { mutableStateOf(false) }
-    Column {
+private fun DayPlate(day: Day, showLatest: Boolean, onLatest: () -> Unit) {
+    val c = Line.c
+    Row(Modifier.fillMaxWidth().background(c.ground).padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 4.dp).height(36.dp)) {
         Row(
-            Modifier.fillMaxWidth().clickable { open = !open }.heightIn(min = 48.dp).padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+            Modifier.weight(1f).fillMaxWidth().height(36.dp)
+                .background(c.surface, if (showLatest) RoundedCornerShape(6.dp, 0.dp, 0.dp, 6.dp) else RoundedCornerShape(6.dp))
+                .border(2.dp, c.plateEdge, if (showLatest) RoundedCornerShape(6.dp, 0.dp, 0.dp, 6.dp) else RoundedCornerShape(6.dp))
+                .padding(horizontal = 10.dp).semantics(mergeDescendants = true) { heading() },
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Bubble(EventKind.TEXT)
-            val n = item.texts.size
-            Text(if (n == 1) "1 text" else "$n texts", Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            val first = Fmt.time(item.texts.first().at); val last = Fmt.time(item.texts.last().at)
-            Text(if (first == last) first else "$first – $last", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Icon(if (open) LineIcons.ChevronUp else LineIcons.ChevronDown, if (open) "Hide texts" else "Show texts", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Sign(plateLabel(day.date), 16.sp, c.ink, Modifier.weight(1f), maxLines = 1)
+            // Pinned with "↑ Latest" there's no room for the counts; they show whenever the plate isn't pinned.
+            if (!showLatest) { Spacer(Modifier.width(8.dp)); Sign(day.counts, 14.sp, c.muted, weight = FontWeight.SemiBold, maxLines = 1) }
         }
-        if (open) Column(Modifier.padding(start = 52.dp, end = 14.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (t in item.texts) Column(Modifier.fillMaxWidth().clickable { onEventClick(t) }) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(Fmt.time(t.at), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    PartyLine(parties.of(t.number))
-                }
-                Text(t.text, fontSize = 13.sp, lineHeight = 19.sp)
+        if (showLatest) Row(
+            Modifier.height(36.dp).background(Brand.Ink, RoundedCornerShape(0.dp, 6.dp, 6.dp, 0.dp))
+                .border(2.dp, c.plateEdge, RoundedCornerShape(0.dp, 6.dp, 6.dp, 0.dp))
+                .clickable(role = Role.Button, onClickLabel = "Jump to the latest waypoint", onClick = onLatest).padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(LineIcons.ArrowUp, null, Modifier.size(16.dp), tint = c.amber)
+            Spacer(Modifier.width(4.dp))
+            Sign("Latest", 16.sp, c.amber)
+        }
+    }
+}
+
+@Composable
+private fun Waypoint(item: TimelineItem, parties: Parties, lineColor: Color, needsYouId: Long?, selectedId: Long?, last: Boolean, onEventClick: (Event) -> Unit) {
+    val c = Line.c
+    val main = eventsOf(item).first()
+    val selected = eventsOf(item).any { it.id == selectedId }
+    val needs = eventsOf(item).any { it.id == needsYouId }
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(end = 16.dp)) {
+        // The gutter: the loop's line runs through every row; the oldest waypoint is where it began.
+        Box(Modifier.width(56.dp).fillMaxHeight().drawBehind {
+            val x = size.width / 2 + 4.dp.toPx(); val my = 30.dp.toPx()
+            drawLine(lineColor, Offset(x, 0f), Offset(x, if (last) my else size.height), strokeWidth = 6.dp.toPx())
+        }.heightIn(min = 60.dp)) {
+            Canvas(Modifier.padding(start = 4.dp).size(52.dp, 60.dp)) {
+                val m = Offset(size.width / 2, 30.dp.toPx())
+                if (selected) drawCircle(c.amber.copy(alpha = 0.4f), 18.dp.toPx(), m)
+                drawCircle(c.ground, 13.dp.toPx(), m)
+                drawStop(
+                    if (item is TimelineItem.Texts) StopShape.RECORDED else stopShape(main), m,
+                    (if (needs || selected) 22 else 18).dp.toPx(), lineColor, c.ground, c.amber, needsYou = needs, noteFill = c.ground,
+                )
             }
         }
+        Column(
+            Modifier.weight(1f).padding(vertical = 6.dp)
+                .background(c.surface, RoundedCornerShape(12.dp))
+                .then(if (selected) Modifier.border(2.dp, c.amber, RoundedCornerShape(12.dp)) else Modifier)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            when (item) {
+                is TimelineItem.Call -> {
+                    TitleRow(Fmt.kind(item.call.kind), parties.of(item.call.number), Fmt.time(item.call.at) + (item.call.durationSec?.let { " · " + Fmt.duration(it) } ?: "")) { onEventClick(item.call) }
+                    for (a in item.attached) Box(Modifier.clickable { onEventClick(a) }) {
+                        if (a.kind == EventKind.VOICEMAIL) Voicemail(a) else Stamped(a, lineColor)
+                    }
+                }
+                is TimelineItem.Single -> {
+                    val e = item.event
+                    TitleRow(Fmt.kind(e.kind), parties.of(e.number), Fmt.time(e.at)) { onEventClick(e) }
+                    if (e.kind == EventKind.VOICEMAIL) Voicemail(e, showTitle = false)
+                    else if (e.text.isNotBlank()) Text(e.text, fontSize = 14.sp, lineHeight = 20.sp, color = c.body, modifier = Modifier.clickable { onEventClick(e) })
+                }
+                is TimelineItem.Texts -> Texts(item, parties, onEventClick)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TitleRow(title: String, party: String?, meta: String, onClick: () -> Unit) {
+    val c = Line.c
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick), verticalAlignment = Alignment.CenterVertically) {
+        Text(listOfNotNull(title, party).joinToString(" · "), Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+            color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        MonoLabel(meta)
+    }
+}
+
+@Composable
+private fun Stamped(e: Event, lineColor: Color) {
+    val c = Line.c
+    Text(
+        buildAnnotatedString {
+            e.callOffsetSec?.let { withStyle(SpanStyle(fontFamily = Type.Mono, fontSize = 12.sp, color = lineColor)) { append(Fmt.duration(it)) }; append("  ") }
+            append(e.text)
+        },
+        fontSize = 14.sp, lineHeight = 20.sp, color = c.body,
+    )
+}
+
+@Composable
+private fun Voicemail(e: Event, showTitle: Boolean = true) {
+    val c = Line.c
+    Column(Modifier.fillMaxWidth().background(c.amberWash, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (showTitle) Sign("Voicemail" + (e.durationSec?.let { " · " + Fmt.duration(it) } ?: ""), 14.sp, c.amberInk)
+        if (e.text.isNotBlank()) Text("\"${e.text}\"", fontSize = 14.sp, lineHeight = 20.sp, color = c.body)
+    }
+}
+
+@Composable
+private fun Texts(item: TimelineItem.Texts, parties: Parties, onEventClick: (Event) -> Unit) {
+    val c = Line.c
+    var open by rememberSaveable(item.at) { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = if (open) "Hide texts" else "Show texts") { open = !open }, verticalAlignment = Alignment.CenterVertically) {
+        val n = item.texts.size
+        Text(if (n == 1) "1 text" else "$n texts", Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = c.ink)
+        MonoLabel(Fmt.time(item.texts.first().at))
+        Icon(if (open) LineIcons.ChevronUp else LineIcons.ChevronDown, null, Modifier.size(18.dp), tint = c.muted)
+    }
+    if (open) for (t in item.texts) Column(Modifier.fillMaxWidth().clickable { onEventClick(t) }) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MonoLabel(Fmt.time(t.at))
+            parties.of(t.number)?.let { MonoLabel(it.uppercase()) }
+        }
+        Text(t.text, fontSize = 14.sp, lineHeight = 20.sp, color = c.body)
     }
 }

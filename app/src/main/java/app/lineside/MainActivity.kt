@@ -88,12 +88,28 @@ class MainActivity : ComponentActivity() {
     private data class Edit(val id: Long?) : Screen
     private data object SettingsView : Screen
 
+    private fun encode(s: Screen) = when (s) {
+        ListScreen -> "list"; SettingsView -> "settings"; is LoopView -> "loop:${s.id}"; is Edit -> s.id?.let { "edit:$it" } ?: "new"
+    }
+    private fun decode(k: String): Screen = when {
+        k == "settings" -> SettingsView
+        k == "new" -> Edit(null)
+        k.startsWith("loop:") -> LoopView(k.removePrefix("loop:").toLong())
+        k.startsWith("edit:") -> Edit(k.removePrefix("edit:").toLong())
+        else -> ListScreen
+    }
+
     @Composable
     private fun Root() {
         val repo = app.repo
         val scope = rememberCoroutineScope()
-        val loops by repo.observeAll().collectAsStateWithLifecycle(emptyList())
-        var screen by remember { mutableStateOf<Screen>(ListScreen) }
+        // null until the database has answered: a restored screen must not mistake "not loaded yet" for "deleted".
+        val loaded by repo.observeAll().collectAsStateWithLifecycle(null as List<LoopFull>?)
+        val loops = loaded.orEmpty()
+        // Survives rotation and theme changes: saved as "list", "loop:<id>", "edit:<id>", "new", "settings".
+        var screen by rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<Screen, String>({ encode(it) }, { decode(it) })) {
+            mutableStateOf<Screen>(ListScreen)
+        }
         val toOpen = openLoop.value
         LaunchedEffect(toOpen) { if (toOpen != null) { screen = LoopView(toOpen); openLoop.value = null } }
         var returnTo by remember { mutableStateOf<Screen>(ListScreen) }
@@ -158,7 +174,7 @@ class MainActivity : ComponentActivity() {
 
             is LoopView -> {
                 val full = loops.firstOrNull { it.loop.id == s.id }
-                if (full == null) { screen = ListScreen; return }
+                if (full == null) { if (loaded != null) screen = ListScreen; return }
                 LoopScreen(
                     full = full, now = now,
                     onBack = { screen = ListScreen },

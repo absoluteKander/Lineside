@@ -49,8 +49,9 @@ import app.lineside.domain.photoStatus
 
 /** Signage text: condensed, upper case, a little tracking. */
 @Composable
-fun Sign(text: String, size: TextUnit = 16.sp, color: Color = Line.c.ink, modifier: Modifier = Modifier, weight: FontWeight = FontWeight.Bold) =
-    Text(text.uppercase(), modifier, color = color, fontFamily = Type.Signage, fontWeight = weight, fontSize = size, letterSpacing = 0.07.em(size))
+fun Sign(text: String, size: TextUnit = 16.sp, color: Color = Line.c.ink, modifier: Modifier = Modifier, weight: FontWeight = FontWeight.Bold, maxLines: Int = Int.MAX_VALUE) =
+    Text(text.uppercase(), modifier, color = color, fontFamily = Type.Signage, fontWeight = weight, fontSize = size, letterSpacing = 0.07.em(size),
+        maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
 
 private fun Double.em(size: TextUnit) = (size.value * this).sp
 
