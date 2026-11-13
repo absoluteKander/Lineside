@@ -6,7 +6,9 @@ package app.lineside.calls
 import android.content.Context
 import android.telephony.TelephonyManager
 import app.lineside.App
+import app.lineside.data.Event
 import app.lineside.data.EventKind
+import app.lineside.domain.Ball
 import app.lineside.domain.Ago
 import app.lineside.domain.Initials
 import app.lineside.domain.LoopStatus
@@ -43,17 +45,40 @@ object CallContext {
         val party = full.numbers.takeIf { it.size > 1 }?.firstOrNull { app.lineside.data.NumberKey.matches(it.number, number) }?.label?.ifBlank { null }
         val now = System.currentTimeMillis()
         val lines = mutableListOf<String>()
+        val said = mutableListOf<Said>()
         val hi = LoopStatus.highlight(full.events)
         if (hi != null) lines += line(hi.kind, hi.text, now - hi.at)
+        hi?.takeIf { it.text.isNotBlank() }?.let { said += said(it) }
         // Your own latest note, if it isn't already the highlight: often the thing you need on the call.
         full.events.filter { it.kind == EventKind.NOTE }.maxByOrNull { it.at }
-            ?.takeIf { it.id != hi?.id }?.let { lines += line(it.kind, it.text, now - it.at) }
+            ?.takeIf { it.id != hi?.id }?.let { lines += line(it.kind, it.text, now - it.at); said += said(it) }
         if (full.loop.topic.isNotBlank()) lines.add(0, full.loop.topic)
         val status = LoopStatus.statusLine(full.events, now, full.loop.topic, full.loop.createdAt)
         val headline = hi?.let { line(it.kind, it.text, now - it.at) } ?: full.loop.topic.ifBlank { null }
         val label = listOfNotNull(Initials.of(full.loop.name), party, status).joinToString(" · ")
         val title = if (party != null) "${full.loop.name} · $party" else full.loop.name
-        return PillContent(loopId, number, title, label, lines, headline, party = party)
+        val ball = LoopStatus.ball(full.events)
+        val hasContact = LoopStatus.lastContact(full.events) != null
+        return PillContent(
+            loopId, number, title, label, lines, headline, party = party,
+            ball = ball,
+            status = if (ball == Ball.CALL_BACK) "Call back" else "Waiting",
+            detail = if (hasContact) status.substringAfter(" · ") else "new",
+            topic = full.loop.topic,
+            stops = full.events.sortedBy { it.at }.takeLast(8),
+            needsId = if (ball == Ball.CALL_BACK) LoopStatus.lastContact(full.events)?.id else null,
+            said = said.take(2),
+        )
+    }
+
+    private fun said(e: Event): Said {
+        val day = java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault()).format(java.util.Date(e.at))
+        val (what, theirs) = when (e.kind) {
+            EventKind.NOTE -> "Your note" to false
+            EventKind.CALL_OUT -> "You called" to false
+            else -> "They said" to true
+        }
+        return Said("$what · $day", e.text.take(200), theirs)
     }
 
     private suspend fun unknown(ctx: Context, number: String): PillContent {
