@@ -44,6 +44,8 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     private val app get() = application as App
 
+    private val themeMode by lazy { androidx.compose.runtime.mutableStateOf(app.settings.themeMode) }
+
     /** A loop to open, from a notification (the quiet-loop nudge). */
     private val openLoop = androidx.compose.runtime.mutableStateOf<Long?>(null)
 
@@ -58,8 +60,9 @@ class MainActivity : ComponentActivity() {
         // Debug builds only: `am start ... --ez runDaily true` runs the daily check now, for testing.
         if (BuildConfig.DEBUG && intent?.getBooleanExtra("runDaily", false) == true)
             androidx.work.WorkManager.getInstance(this).enqueue(androidx.work.OneTimeWorkRequestBuilder<DailyWorker>().build())
-        enableEdgeToEdge()
-        setContent { LinesideTheme { Root() } }
+        // Every screen opens on the dark signage band, so status-bar icons are always light.
+        enableEdgeToEdge(statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
+        setContent { LinesideTheme(themeMode.value) { Root() } }
     }
 
     /** Bumped on resume so permission states re-read after a trip to a system screen. */

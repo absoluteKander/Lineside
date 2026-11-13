@@ -36,6 +36,11 @@ class Settings(ctx: Context) {
     fun nudgedAt(loopId: Long): Long? = p.getLong("nudged_$loopId", 0L).takeIf { it > 0 }
     fun setNudgedAt(loopId: Long, at: Long) = p.edit().putLong("nudged_$loopId", at).apply()
 
+    /** Light, dark, or follow the phone. */
+    var themeMode: app.lineside.ui.ThemeMode
+        get() = runCatching { app.lineside.ui.ThemeMode.valueOf(p.getString("themeMode", "SYSTEM")!!) }.getOrDefault(app.lineside.ui.ThemeMode.SYSTEM)
+        set(v) = p.edit().putString("themeMode", v.name).apply()
+
     var contactsHintDismissed: Boolean
         get() = p.getBoolean("contactsHintDismissed", false)
         set(v) = p.edit().putBoolean("contactsHintDismissed", v).apply()
