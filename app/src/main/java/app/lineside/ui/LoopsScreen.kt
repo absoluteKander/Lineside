@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
@@ -162,27 +163,38 @@ private fun LoopCard(full: LoopFull, now: Long, onClick: () -> Unit) {
     }
 }
 
-/** Calls Lineside noticed in the last week: the place to add context after the fact. */
+/** Calls Lineside noticed this week, one line per loop (most recently called first, at most three). */
 private fun recentCalls(loops: List<LoopFull>, now: Long) = loops
-    .flatMap { l -> l.events.filter { it.source == EventSource.CALL && now - it.at < 7 * LoopStatus.DAY }.map { l to it } }
-    .sortedByDescending { it.second.at }
-    .take(5)
+    .map { l -> l to l.events.filter { it.source == EventSource.CALL && now - it.at < 7 * LoopStatus.DAY }.sortedBy { it.at } }
+    .filter { it.second.isNotEmpty() }
+    .sortedByDescending { it.second.last().at }
+    .take(3)
 
 @Composable
-private fun RecentCalls(rows: List<Pair<LoopFull, Event>>, now: Long, onOpen: (Long) -> Unit) {
+private fun RecentCalls(rows: List<Pair<LoopFull, List<Event>>>, now: Long, onOpen: (Long) -> Unit) {
     val c = Line.c
     Column(Modifier.padding(horizontal = 16.dp).padding(top = 8.dp).fillMaxWidth().background(c.surface, RoundedCornerShape(14.dp)).padding(vertical = 4.dp)) {
-        for ((l, e) in rows) Row(
-            Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(l.loop.id) }.padding(horizontal = 14.dp, vertical = 10.dp),
+        for ((l, calls) in rows) Row(
+            Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Open loop") { onOpen(l.loop.id) }.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // A short stretch of this loop's line with its recent calls as stops, the one that needs you in amber.
             val line = Brand.loop(l.loop.id, c.dark)
-            Canvas(Modifier.size(20.dp)) { drawStop(stopShape(e), center, 14.dp.toPx(), line, c.surface, c.amber, needsYou = false) }
-            Column(Modifier.weight(1f)) {
-                Text(l.loop.name, fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(Fmt.kind(e.kind), fontSize = 13.sp, color = c.muted)
+            val needs = needsYouEvent(l.events)
+            val shown = calls.takeLast(4)
+            Canvas(Modifier.size(width = 64.dp, height = 20.dp)) {
+                val y = size.height / 2; val pad = 7.dp.toPx()
+                drawLine(line, Offset(0f, y), Offset(size.width, y), strokeWidth = 3.dp.toPx())
+                val step = if (shown.size == 1) 0f else (size.width - pad * 2) / (shown.size - 1)
+                shown.forEachIndexed { i, e ->
+                    val x = if (shown.size == 1) size.width - pad else pad + step * i
+                    drawStop(stopShape(e), Offset(x, y), 11.dp.toPx(), line, c.surface, c.amber, needsYou = e.id == needs?.id)
+                }
             }
-            MonoLabel(Ago.long(now - e.at) + (e.durationSec?.let { " · " + Fmt.duration(it) } ?: ""))
+            Text(l.loop.name, Modifier.weight(1f), fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
+                color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val n = calls.size
+            MonoLabel((if (n == 1) "1 call" else "$n calls") + " · " + Ago.short(now - calls.last().at).uppercase())
         }
     }
 }
@@ -202,10 +214,10 @@ private fun QuietRow(full: LoopFull, now: Long, onClick: () -> Unit, onKeep: () 
     ) {
         Column(Modifier.weight(1f)) {
             Text(full.loop.name, fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = c.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("Last waypoint ${Ago.long(now - full.loop.lastActivityAt)}", fontSize = 12.sp, color = c.muted)
+            Text("Quiet " + Ago.long(now - full.loop.lastActivityAt).removeSuffix(" ago"), fontSize = 12.sp, color = c.muted, maxLines = 1)
         }
-        LineButton("Keep", onKeep)
-        LineButton("Close", onClose)
+        LineButton("Keep", onKeep, leading = { KeepGlyph(it) })
+        LineButton("Close", onClose, leading = { TerminusGlyph(it) })
     }
 }
 
@@ -226,18 +238,14 @@ private fun Hint(title: String, body: String, action: String, onAction: () -> Un
 }
 
 @Composable
-private fun NewLoopButton(onNew: () -> Unit, modifier: Modifier) {
-    val c = Line.c
-    Row(
-        modifier.background(c.ink, RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onNew)
-            .padding(start = 18.dp, end = 22.dp, top = 16.dp, bottom = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(LineIcons.Plus, null, tint = c.amber, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(10.dp))
-        Sign("New loop", 19.sp, c.ground)
-    }
-}
+private fun NewLoopButton(onNew: () -> Unit, modifier: Modifier) =
+    // Hollow like every button (fills amber while pressed); a page-coloured backing keeps it readable over the list.
+    LineButton(
+        "New loop", onNew, modifier.shadowLift(), height = 56.dp, textSize = 19.sp, backing = Line.c.ground,
+        leading = { ink -> Icon(LineIcons.Plus, null, tint = ink, modifier = Modifier.size(20.dp)) },
+    )
+
+private fun Modifier.shadowLift() = this.shadow(8.dp, RoundedCornerShape(10.dp), clip = false)
 
 @Composable
 private fun EmptyState() {

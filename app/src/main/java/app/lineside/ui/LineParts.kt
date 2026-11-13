@@ -173,7 +173,10 @@ fun MonoLabel(text: String, color: Color = Line.c.muted, size: TextUnit = 11.sp)
 @Composable
 fun LineButton(
     text: String, onClick: () -> Unit, modifier: Modifier = Modifier, edge: Color = Line.c.ink,
-    active: Boolean = false, enabled: Boolean = true, leading: (@Composable () -> Unit)? = null,
+    active: Boolean = false, enabled: Boolean = true, height: Dp = 44.dp, textSize: TextUnit = 16.sp,
+    /** Solid backing for buttons that float over content; still reads as hollow (same as the page). */
+    backing: Color = Color.Transparent,
+    leading: (@Composable (ink: Color) -> Unit)? = null,
 ) {
     val c = Line.c
     val source = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
@@ -181,16 +184,34 @@ fun LineButton(
     val filled = (pressed || active) && enabled
     Row(
         modifier
-            .height(44.dp)
-            .background(if (filled) c.amber else Color.Transparent, RoundedCornerShape(10.dp))
+            .height(height)
+            .background(if (filled) c.amber else backing, RoundedCornerShape(10.dp))
             .border(1.5.dp, if (filled) c.amber else if (enabled) edge else c.muted, RoundedCornerShape(10.dp))
             .clickable(interactionSource = source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
     ) {
-        leading?.let { it(); Spacer(Modifier.width(8.dp)) }
-        Sign(text, 16.sp, if (filled) c.onAmber else if (enabled) edge else c.muted)
+        val ink = if (filled) c.onAmber else if (enabled) edge else c.muted
+        leading?.let { it(ink); Spacer(Modifier.width(8.dp)) }
+        Sign(text, textSize, ink)
     }
 }
 
+
+/** The line carrying on: a solid stretch, then dashes. For "Keep". */
+@Composable
+fun KeepGlyph(ink: Color) = Canvas(Modifier.size(width = 20.dp, height = 14.dp)) {
+    val y = size.height / 2; val w = 3.dp.toPx()
+    drawLine(ink, Offset(0f, y), Offset(size.width * 0.45f, y), strokeWidth = w)
+    drawLine(ink, Offset(size.width * 0.55f, y), Offset(size.width, y), strokeWidth = w,
+        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))
+}
+
+/** The line ending at the terminus bar. For "Close loop". */
+@Composable
+fun TerminusGlyph(ink: Color) = Canvas(Modifier.size(width = 20.dp, height = 14.dp)) {
+    val y = size.height / 2; val w = 3.dp.toPx()
+    drawLine(ink, Offset(0f, y), Offset(size.width - w, y), strokeWidth = w)
+    drawLine(ink, Offset(size.width - w / 2, 0f), Offset(size.width - w / 2, size.height), strokeWidth = w)
+}
