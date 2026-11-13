@@ -31,7 +31,7 @@ class DailyWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx,
         val app = App.of(applicationContext)
         app.repo.resyncAll()
         val now = System.currentTimeMillis()
-        if (QuietNudge.canPost(app)) for (l in app.repo.openLoopsAll()) {
+        if (app.settings.quietNudge && QuietNudge.canPost(app)) for (l in app.repo.openLoopsAll()) {
             if (LoopStatus.shouldNudge(l.loop, app.settings.nudgedAt(l.loop.id), now)) {
                 QuietNudge.post(app, l.loop.id, l.loop.name)
                 app.settings.setNudgedAt(l.loop.id, now)

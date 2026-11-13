@@ -107,6 +107,7 @@ class MainActivity : ComponentActivity() {
         var pillOn by remember { mutableStateOf(settings.pillEnabled) }
         var unknownOn by remember { mutableStateOf(settings.unknownCallerPill) }
         var discreetOn by remember { mutableStateOf(settings.discreetCallScreen) }
+        var nudgeOn by remember { mutableStateOf(settings.quietNudge) }
         val askPerms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             permTick++
             if (hasContacts()) scope.launch { repo.resyncAll() }
@@ -147,6 +148,8 @@ class MainActivity : ComponentActivity() {
                 onUnknownPill = { unknownOn = it; settings.unknownCallerPill = it },
                 discreet = discreetOn,
                 onDiscreet = { discreetOn = it; settings.discreetCallScreen = it; scope.launch { repo.resyncAll() } },
+                quietNudge = nudgeOn,
+                onQuietNudge = { nudgeOn = it; settings.quietNudge = it },
                 onAllow = allow,
             )
 

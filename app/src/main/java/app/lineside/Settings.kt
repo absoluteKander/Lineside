@@ -27,6 +27,11 @@ class Settings(ctx: Context) {
         get() = p.getBoolean("discreetCallScreen", false)
         set(v) = p.edit().putBoolean("discreetCallScreen", v).apply()
 
+    /** One reminder when a loop has been quiet for three weeks. Off unless the user asks for it (offered in onboarding). */
+    var quietNudge: Boolean
+        get() = p.getBoolean("quietNudge", false)
+        set(v) = p.edit().putBoolean("quietNudge", v).apply()
+
     /** When each loop was last nudged as quiet (loop id → time). */
     fun nudgedAt(loopId: Long): Long? = p.getLong("nudged_$loopId", 0L).takeIf { it > 0 }
     fun setNudgedAt(loopId: Long, at: Long) = p.edit().putLong("nudged_$loopId", at).apply()

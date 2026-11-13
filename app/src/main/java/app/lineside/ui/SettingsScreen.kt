@@ -45,6 +45,8 @@ fun SettingsScreen(
     onAllow: (Access) -> Unit,
     discreet: Boolean,
     onDiscreet: (Boolean) -> Unit,
+    quietNudge: Boolean,
+    onQuietNudge: (Boolean) -> Unit,
 ) {
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding()
@@ -71,6 +73,15 @@ fun SettingsScreen(
                 "A ringing phone is readable by anyone nearby. Discreet shows only \"Call back\" or \"Waiting\" and how long ago, " +
                     "never a loop's topic or who within it is calling. The loop's name still shows.",
                 discreet, onDiscreet,
+            )
+        }
+        SectionLabel("Reminders", Modifier.padding(start = 20.dp, top = 20.dp, bottom = 8.dp))
+        Group {
+            Toggle(
+                "Remind me about quiet loops",
+                "One silent notification when a loop has had no calls or notes for three weeks, asking whether you're still waiting. " +
+                    "Off: quiet loops just move to the bottom of the list.",
+                quietNudge, onQuietNudge,
             )
         }
         SectionLabel("What Lineside can do", Modifier.padding(start = 20.dp, top = 20.dp, bottom = 4.dp))
