@@ -222,7 +222,7 @@ fun TerminusGlyph(ink: Color) = Canvas(Modifier.size(width = 20.dp, height = 14.
 
 /**
  * The Lineside wordmark: the name in signage type riding on its own line. The line leaves a hollow station stop,
- * runs under the word and a little past it, and ends in an arrowhead: the line carries on.
+ * runs under the word and a little past it, and ends in the note stop's diamond.
  * Not amber: amber is only ever "needs you".
  */
 @Composable
@@ -234,11 +234,12 @@ fun Wordmark(ink: Color, hole: Color, modifier: Modifier = Modifier, size: TextU
             val y = this.size.height / 2
             val stroke = 6.dp.toPx()
             val r = 7.dp.toPx()
-            val head = 18.dp.toPx()
+            val s = 9.dp.toPx() // half the diamond's width
             val cx = r + stroke / 2
-            drawLine(ink, Offset(cx, y), Offset(this.size.width - head + 1f, y), strokeWidth = stroke)
-            val tip = this.size.width
-            drawPath(Path().apply { moveTo(tip, y); lineTo(tip - head, y - head * 0.5f); lineTo(tip - head, y + head * 0.5f); close() }, ink)
+            val dx = this.size.width - s
+            drawLine(ink, Offset(cx, y), Offset(dx, y), strokeWidth = stroke)
+            // The note stop's diamond: its leading half points the line onward.
+            drawPath(Path().apply { moveTo(dx, y - s); lineTo(dx + s, y); lineTo(dx, y + s); lineTo(dx - s, y); close() }, ink)
             drawCircle(hole, r, Offset(cx, y))
             drawCircle(ink, r, Offset(cx, y), style = Stroke(stroke * 0.8f))
         }
