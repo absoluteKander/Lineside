@@ -80,15 +80,16 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.launch
 
-/** Who a number is within a loop, for loops that have gathered several parties. */
+/** Who a number is within a loop. Only matters once a loop has gathered several numbers. */
 private class Parties(numbers: List<LoopNumber>) {
     private val ordered = numbers.sortedBy { it.id }
     val multi = ordered.size > 1
+    /** The name for this number, or null. [unnamed] is true when the loop has several numbers and this one has no name yet. */
     fun of(number: String?): String? {
         if (!multi || number == null) return null
-        val n = ordered.firstOrNull { NumberKey.matches(it.number, number) } ?: return number
-        return n.label.ifBlank { n.number }
+        return ordered.firstOrNull { NumberKey.matches(it.number, number) }?.label?.ifBlank { null }
     }
+    fun unnamed(number: String?) = multi && number != null && of(number) == null
 }
 
 @Composable
@@ -102,9 +103,11 @@ fun LoopScreen(
     onLog: () -> Unit,
     onClose: () -> Unit,
     onEventClick: (Event) -> Unit,
+    onNameNumber: (number: String, name: String) -> Unit,
 ) {
     val c = Line.c
     val loop = full.loop
+    var naming by remember { mutableStateOf<String?>(null) }
     val lineColor = Brand.loop(loop.id, c.dark)
     val parties = Parties(full.numbers)
     val days = remember(full.events) { Timeline.group(full.events) }
@@ -176,7 +179,7 @@ fun LoopScreen(
                 day.items.forEachIndexed { ii, item ->
                     val last = di == days.lastIndex && ii == day.items.lastIndex
                     item(key = "e" + eventsOf(item).first().id) {
-                        Waypoint(item, parties, lineColor, needs?.id, selectedId, last, onEventClick)
+                        Waypoint(item, parties, lineColor, needs?.id, selectedId, last, onEventClick) { naming = it }
                     }
                 }
             }
@@ -192,14 +195,44 @@ fun LoopScreen(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { pickNumber = false; onCall(n.number) },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(n.label.ifBlank { "Number" }, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                    MonoLabel(n.number, size = 13.sp)
+                    Text(n.label.ifBlank { "Unnamed" }, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                    MonoLabel(Fmt.phone(n.number), size = 13.sp)
                 }
             }
         },
         confirmButton = {},
         dismissButton = { TextButton(onClick = { pickNumber = false }) { Text("Cancel") } },
     )
+
+    naming?.let { number -> NameNumberDialog(number, onDismiss = { naming = null }) { name -> naming = null; onNameNumber(number, name) } }
+}
+
+/** "Who's on (555) 014-2299?" Names it once; every waypoint from that number picks it up. */
+@Composable
+private fun NameNumberDialog(number: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var name by rememberSaveable { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Who's on ${Fmt.phone(number)}?", fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 22.sp) },
+        text = {
+            androidx.compose.material3.OutlinedTextField(
+                name, { name = it }, singleLine = true, placeholder = { Text("Front desk, Radiology, Billing…") },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Words),
+            )
+        },
+        confirmButton = { LineButton("Save", { onSave(name.trim()) }, enabled = name.isNotBlank()) },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** The placeholder for a number in this loop that has no name yet: hollow, so it reads as "tap me". */
+@Composable
+private fun NameChip(onClick: () -> Unit) {
+    val c = Line.c
+    Row(
+        Modifier.border(1.5.dp, c.muted, RoundedCornerShape(6.dp)).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 6.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) { Sign("+ Name this number", 12.sp, c.muted) }
 }
 
 private fun eventsOf(item: TimelineItem): List<Event> = when (item) {
@@ -311,7 +344,7 @@ private fun DayPlate(day: Day, showLatest: Boolean, onLatest: () -> Unit) {
 }
 
 @Composable
-private fun Waypoint(item: TimelineItem, parties: Parties, lineColor: Color, needsYouId: Long?, selectedId: Long?, last: Boolean, onEventClick: (Event) -> Unit) {
+private fun Waypoint(item: TimelineItem, parties: Parties, lineColor: Color, needsYouId: Long?, selectedId: Long?, last: Boolean, onEventClick: (Event) -> Unit, onName: (String) -> Unit) {
     val c = Line.c
     val main = eventsOf(item).first()
     val selected = eventsOf(item).any { it.id == selectedId }
@@ -342,6 +375,7 @@ private fun Waypoint(item: TimelineItem, parties: Parties, lineColor: Color, nee
             when (item) {
                 is TimelineItem.Call -> {
                     TitleRow(Fmt.kind(item.call.kind), parties.of(item.call.number), Fmt.time(item.call.at) + (item.call.durationSec?.let { " · " + Fmt.duration(it) } ?: "")) { onEventClick(item.call) }
+                    if (parties.unnamed(item.call.number)) NameChip { onName(item.call.number!!) }
                     for (a in item.attached) Box(Modifier.clickable { onEventClick(a) }) {
                         if (a.kind == EventKind.VOICEMAIL) Voicemail(a) else Stamped(a, lineColor)
                     }
@@ -349,6 +383,7 @@ private fun Waypoint(item: TimelineItem, parties: Parties, lineColor: Color, nee
                 is TimelineItem.Single -> {
                     val e = item.event
                     TitleRow(Fmt.kind(e.kind), parties.of(e.number), Fmt.time(e.at)) { onEventClick(e) }
+                    if (parties.unnamed(e.number) && e.kind != EventKind.NOTE) NameChip { onName(e.number!!) }
                     if (e.kind == EventKind.VOICEMAIL) Voicemail(e, showTitle = false)
                     else if (e.text.isNotBlank()) Text(e.text, fontSize = 14.sp, lineHeight = 20.sp, color = c.body, modifier = Modifier.clickable { onEventClick(e) })
                 }

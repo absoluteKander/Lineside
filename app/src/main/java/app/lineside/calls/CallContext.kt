@@ -62,7 +62,7 @@ object CallContext {
             val ball = if (LoopStatus.ball(f.events) == app.lineside.domain.Ball.CALL_BACK) "Call back" else "Waiting"
             LoopChoice(f.loop.id, f.loop.name, listOf(f.loop.topic, ball).filter { it.isNotBlank() }.joinToString(" · "))
         }
-        return PillContent(null, number, number, "+ Start a loop", emptyList(), choices = choices)
+        return PillContent(null, number, app.lineside.ui.Fmt.phone(number), "+ Start a loop", emptyList(), choices = choices)
     }
 
     private fun line(kind: EventKind, text: String, ago: Long): String {

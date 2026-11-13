@@ -184,6 +184,7 @@ class MainActivity : ComponentActivity() {
                     onLog = { sheet = "log" },
                     onClose = { sheet = "close" },
                     onEventClick = { openEvent = it },
+                    onNameNumber = { number, name -> scope.launch { repo.setNumberLabel(full.loop.id, number, name) } },
                 )
                 Sheets(full, sheet, openEvent, onSheet = { sheet = it }, onEvent = { openEvent = it }, onClosed = { screen = ListScreen })
             }
@@ -215,7 +216,7 @@ class MainActivity : ComponentActivity() {
                 scope.launch { repo.addEvent(Event(loopId = id, kind = EventKind.NOTE, at = System.currentTimeMillis(), text = text)) }
                 onSheet(null)
             }
-            "log" -> LogSheet(full.numbers.map { it.number }, onDismiss = { onSheet(null) }) { kind, ago, number, text ->
+            "log" -> LogSheet(full.numbers.sortedBy { it.id }.map { it.number to it.label }, onDismiss = { onSheet(null) }) { kind, ago, number, text ->
                 scope.launch { repo.addEvent(Event(loopId = id, kind = kind, at = System.currentTimeMillis() - ago, number = number, text = text)) }
                 onSheet(null)
             }

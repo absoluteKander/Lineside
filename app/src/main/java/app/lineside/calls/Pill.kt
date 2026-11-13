@@ -33,6 +33,7 @@ import app.lineside.data.Event
 import app.lineside.data.EventKind
 import app.lineside.data.NumberInput
 import app.lineside.domain.Initials
+import app.lineside.ui.Fmt
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -316,7 +317,7 @@ object Pill {
             }
         }
         titleTv?.text = ch.name
-        addedTv?.text = "Added ${c.number} to this loop"
+        addedTv?.text = "Added ${Fmt.phone(c.number)} to this loop"
         addedRow?.visibility = View.VISIBLE
         partyInput?.visibility = View.VISIBLE
         choicesBox?.visibility = View.GONE

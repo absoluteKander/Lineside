@@ -150,10 +150,10 @@ private val whens = listOf(0L to "Just now", 60 * 60_000L to "An hour ago", 3 * 
 
 /** Logging by hand: for anyone who skipped the permissions, or a call made from another phone. */
 @Composable
-fun LogSheet(numbers: List<String>, onDismiss: () -> Unit, onSave: (kind: EventKind, agoMs: Long, number: String?, text: String) -> Unit) {
+fun LogSheet(numbers: List<Pair<String, String>>, onDismiss: () -> Unit, onSave: (kind: EventKind, agoMs: Long, number: String?, text: String) -> Unit) {
     var kind by rememberSaveable { mutableStateOf(EventKind.MISSED) }
     var ago by rememberSaveable { mutableStateOf(0L) }
-    var number by rememberSaveable { mutableStateOf(numbers.firstOrNull()) }
+    var number by rememberSaveable { mutableStateOf(numbers.firstOrNull()?.first) }
     var text by rememberSaveable { mutableStateOf("") }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp).imePadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -165,7 +165,8 @@ fun LogSheet(numbers: List<String>, onDismiss: () -> Unit, onSave: (kind: EventK
                 for ((ms, label) in whens) FilterChip(ago == ms, { ago = ms }, { Text(label) })
             }
             if (numbers.size > 1) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (n in numbers) FilterChip(number == n, { number = n }, { Text(n) })
+                // Names, not digits: the last four tell unnamed numbers apart.
+                for ((n, label) in numbers) FilterChip(number == n, { number = n }, { Text(label.ifBlank { Fmt.last4(n) }) })
             }
             val hint = when (kind) {
                 EventKind.VOICEMAIL -> "What they said (optional)"

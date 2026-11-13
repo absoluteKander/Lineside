@@ -66,6 +66,13 @@ object Fmt {
     fun day(d: java.time.LocalDate): String = (if (d.year == java.time.LocalDate.now().year) day else dayYear).format(d)
     fun duration(sec: Int): String = "%d:%02d".format(sec / 60, sec % 60)
 
+    /** "(555) 014-2299", formatted for the phone's country. Only where the full number matters. */
+    fun phone(number: String): String =
+        android.telephony.PhoneNumberUtils.formatNumber(number, Locale.getDefault().country.ifBlank { "US" }) ?: number
+
+    /** "··2299": enough to tell numbers apart when there's no name. */
+    fun last4(number: String): String = "··" + number.filter { it.isDigit() }.takeLast(4)
+
     fun kind(kind: EventKind): String = when (kind) {
         EventKind.NOTE -> "Your note"
         EventKind.CALL_IN -> "They called"
