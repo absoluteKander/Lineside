@@ -136,13 +136,13 @@ fun LoopScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(LineIcons.Back, "Back", tint = c.headerInk) }
                 RouteBullet(loop.id, loop.name, 34.dp)
-                Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                // Tapping the name edits the loop (name, topic, numbers). No separate pencil: it read as a second "Note".
+                Column(Modifier.weight(1f).padding(start = 8.dp).clickable(role = Role.Button, onClickLabel = "Edit loop", onClick = onEdit)) {
                     Text(loop.name, fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 25.sp,
                         color = c.headerInk, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
                     if (loop.topic.isNotBlank()) Text(loop.topic, fontSize = 12.sp, color = c.headerMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Lamp(LoopStatus.ball(full.events), onDark = true)
-                IconButton(onClick = onEdit) { Icon(LineIcons.Edit, "Edit loop", tint = c.headerMuted) }
+                Box(Modifier.padding(end = 12.dp)) { Lamp(LoopStatus.ball(full.events), onDark = true) }
             }
             Box(Modifier.padding(horizontal = 12.dp)) {
                 TimelineMap(stops, lineColor, needs?.id, selectedId, if (list.firstVisibleItemIndex == 0) null else hereDay, latestKey) { e ->
