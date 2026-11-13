@@ -212,11 +212,11 @@ class MainActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         val id = full.loop.id
         when (sheet) {
-            "note" -> NoteSheet(onDismiss = { onSheet(null) }) { text ->
+            "note" -> NoteSheet(full.loop, onDismiss = { onSheet(null) }) { text ->
                 scope.launch { repo.addEvent(Event(loopId = id, kind = EventKind.NOTE, at = System.currentTimeMillis(), text = text)) }
                 onSheet(null)
             }
-            "log" -> LogSheet(full.numbers.sortedBy { it.id }.map { it.number to it.label }, onDismiss = { onSheet(null) }) { kind, ago, number, text ->
+            "log" -> LogSheet(full.loop, full.numbers.sortedBy { it.id }.map { it.number to it.label }, onDismiss = { onSheet(null) }) { kind, ago, number, text ->
                 scope.launch { repo.addEvent(Event(loopId = id, kind = kind, at = System.currentTimeMillis() - ago, number = number, text = text)) }
                 onSheet(null)
             }

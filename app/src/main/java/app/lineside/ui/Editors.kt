@@ -122,69 +122,6 @@ fun LoopEditor(existing: LoopFull?, onCancel: () -> Unit, onSave: (name: String,
     }
 }
 
-@Composable
-fun NoteSheet(onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    var text by rememberSaveable { mutableStateOf("") }
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp).imePadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Add a note", style = MaterialTheme.typography.titleMedium)
-            OutlinedTextField(
-                text, { text = it }, Modifier.fillMaxWidth().focusRequester(focus), minLines = 3,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-                Button(onClick = { onSave(text) }, enabled = text.isNotBlank()) { Text("Save note") }
-            }
-        }
-    }
-}
-
-private val logKinds = listOf(
-    EventKind.MISSED to "Missed call", EventKind.VOICEMAIL to "Voicemail", EventKind.TEXT to "Text",
-    EventKind.CALL_IN to "They called", EventKind.CALL_OUT to "I called",
-)
-private val whens = listOf(0L to "Just now", 60 * 60_000L to "An hour ago", 3 * 60 * 60_000L to "Earlier today", 24 * 60 * 60_000L to "Yesterday")
-
-/** Logging by hand: for anyone who skipped the permissions, or a call made from another phone. */
-@Composable
-fun LogSheet(numbers: List<Pair<String, String>>, onDismiss: () -> Unit, onSave: (kind: EventKind, agoMs: Long, number: String?, text: String) -> Unit) {
-    var kind by rememberSaveable { mutableStateOf(EventKind.MISSED) }
-    var ago by rememberSaveable { mutableStateOf(0L) }
-    var number by rememberSaveable { mutableStateOf(numbers.firstOrNull()?.first) }
-    var text by rememberSaveable { mutableStateOf("") }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp).imePadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Log a call or message", style = MaterialTheme.typography.titleMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for ((k, label) in logKinds) FilterChip(kind == k, { kind = k }, { Text(label) })
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for ((ms, label) in whens) FilterChip(ago == ms, { ago = ms }, { Text(label) })
-            }
-            if (numbers.size > 1) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Names, not digits: the last four tell unnamed numbers apart.
-                for ((n, label) in numbers) FilterChip(number == n, { number = n }, { Text(label.ifBlank { Fmt.last4(n) }) })
-            }
-            val hint = when (kind) {
-                EventKind.VOICEMAIL -> "What they said (optional)"
-                EventKind.TEXT -> "The message (optional)"
-                else -> "Anything worth remembering (optional)"
-            }
-            OutlinedTextField(
-                text, { text = it }, Modifier.fillMaxWidth(), minLines = 2, label = { Text(hint) },
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-                Button(onClick = { onSave(kind, ago, number, text) }) { Text("Log it") }
-            }
-        }
-    }
-}
-
 /** Tapping a timeline item: see it in full, or delete it. */
 @Composable
 fun EventSheet(event: Event, onDismiss: () -> Unit, onDelete: () -> Unit) {

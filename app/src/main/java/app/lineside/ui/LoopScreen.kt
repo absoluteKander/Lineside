@@ -186,23 +186,7 @@ fun LoopScreen(
         }
     }
 
-    if (pickNumber) AlertDialog(
-        onDismissRequest = { pickNumber = false },
-        title = { Text("Call which number?", fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 22.sp) },
-        text = {
-            Column {
-                for (n in full.numbers.sortedBy { it.id }) Row(
-                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { pickNumber = false; onCall(n.number) },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(n.label.ifBlank { "Unnamed" }, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                    MonoLabel(Fmt.phone(n.number), size = 13.sp)
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = { pickNumber = false }) { Text("Cancel") } },
-    )
+    if (pickNumber) CallSheet(loop, full.numbers, onDismiss = { pickNumber = false }) { pickNumber = false; onCall(it) }
 
     naming?.let { number -> NameNumberDialog(number, onDismiss = { naming = null }) { name -> naming = null; onNameNumber(number, name) } }
 }
