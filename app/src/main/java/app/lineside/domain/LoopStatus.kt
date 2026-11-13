@@ -59,9 +59,10 @@ object LoopStatus {
      * The short line the phone app shows under the loop's name on the call screen (as the number's label).
      * Kept short: Google Phone truncates around 30 characters. e.g. "Call back · VM 4d", "Waiting · you called 2h".
      */
-    fun statusLine(events: List<Event>, now: Long, topic: String = "", createdAt: Long = now): String {
-        // Nothing has happened yet: what it's about is the most useful thing to show.
-        val last = lastContact(events) ?: return topic.trim().take(30).ifBlank { "Waiting · opened ${Ago.short(now - createdAt)}" }
+    fun statusLine(events: List<Event>, now: Long, topic: String = "", createdAt: Long = now, discreet: Boolean = false): String {
+        // Nothing has happened yet: what it's about is the most useful thing to show (unless that's private).
+        val opened = "Waiting · opened ${Ago.short(now - createdAt)}"
+        val last = lastContact(events) ?: return if (discreet) opened else topic.trim().take(30).ifBlank { opened }
         val ago = Ago.short(now - last.at)
         val what = when (last.kind) {
             EventKind.VOICEMAIL -> "VM $ago"
@@ -74,6 +75,23 @@ object LoopStatus {
         return (if (ball(events) == Ball.CALL_BACK) "Call back · " else "Waiting · ") + what
     }
 }
+
+/** The few characters that fit on the generated contact photo: "VM 4d", "missed 2h", "talked 1d", "new". */
+fun LoopStatus.photoStatus(events: List<Event>, now: Long): String {
+    val last = lastContact(events) ?: return "new"
+    val ago = Ago.short(now - last.at)
+    return when (last.kind) {
+        EventKind.VOICEMAIL -> "VM $ago"
+        EventKind.MISSED -> "missed $ago"
+        EventKind.TEXT -> "text $ago"
+        EventKind.CALL_OUT -> "called $ago"
+        EventKind.CALL_IN, EventKind.NOTE -> "talked $ago"
+    }
+}
+
+/** A quiet loop deserves one nudge per quiet stretch: none yet, or the last one was before its latest activity or Keep. */
+fun LoopStatus.shouldNudge(loop: app.lineside.data.Loop, lastNudgedAt: Long?, now: Long): Boolean =
+    isQuiet(loop, now) && (lastNudgedAt == null || lastNudgedAt < maxOf(loop.lastActivityAt, loop.keptAt ?: 0L))
 
 object Ago {
     /** "now", "5m", "3h", "4d", "6w". */

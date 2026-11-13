@@ -22,14 +22,18 @@ import android.provider.ContactsContract.RawContacts
 import android.util.Log
 import app.lineside.R
 import app.lineside.data.LoopFull
+import androidx.compose.ui.graphics.toArgb
+import app.lineside.domain.Initials
 import app.lineside.domain.LoopStatus
+import app.lineside.domain.photoStatus
+import app.lineside.ui.Brand
 
 /**
  * Loops shown as real system contacts, so the phone app displays them on the call screen.
  * They live under Lineside's own local account, which never syncs anywhere. Everything here is
  * optional: without Contacts access every call is a no-op and loops live only inside Lineside.
  */
-class ContactSurface(private val ctx: Context) {
+class ContactSurface(private val ctx: Context, private val discreet: () -> Boolean = { false }) {
     private val accountType = ctx.getString(R.string.account_type)
     private val account = Account(ACCOUNT_NAME, accountType)
     private val cr get() = ctx.contentResolver
@@ -68,7 +72,9 @@ class ContactSurface(private val ctx: Context) {
         return runCatching {
             val existing = full.loop.rawContactId?.takeIf { exists(it) }
             val rawId = existing ?: create()
-            write(rawId, full, LoopStatus.statusLine(full.events, now, full.loop.topic, full.loop.createdAt))
+            val isPrivate = discreet()
+            write(rawId, full, LoopStatus.statusLine(full.events, now, full.loop.topic, full.loop.createdAt, isPrivate), isPrivate)
+            writePhoto(rawId, full, now)
             rawId
         }.onFailure { Log.w(TAG, "sync failed", it) }.getOrNull()
     }
@@ -81,7 +87,24 @@ class ContactSurface(private val ctx: Context) {
         return ContentUris.parseId(uri)
     }
 
-    private fun write(rawId: Long, full: LoopFull, status: String) {
+    /** Photos are big writes: only redraw when what's on it changes. */
+    private val photoKeys = ctx.getSharedPreferences("photo_keys", Context.MODE_PRIVATE)
+
+    private fun writePhoto(rawId: Long, full: LoopFull, now: Long) {
+        val initials = Initials.of(full.loop.name)
+        val status = LoopStatus.photoStatus(full.events, now)
+        val color = Brand.avatar(full.loop.id).toArgb()
+        val key = "$initials|$status|$color"
+        if (photoKeys.getString(rawId.toString(), null) == key) return
+        val jpeg = PhotoRenderer.render(initials, status, color)
+        val uri = Uri.withAppendedPath(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawId), RawContacts.DisplayPhoto.CONTENT_DIRECTORY)
+        runCatching {
+            cr.openAssetFileDescriptor(uri, "rw")?.use { fd -> fd.createOutputStream().use { it.write(jpeg) } }
+            photoKeys.edit().putString(rawId.toString(), key).apply()
+        }.onFailure { Log.w(TAG, "photo write failed", it) }
+    }
+
+    private fun write(rawId: Long, full: LoopFull, status: String, isPrivate: Boolean) {
         val sel = "${Data.RAW_CONTACT_ID}=? AND ${Data.MIMETYPE}=?"
         val ops = arrayListOf(
             ContentProviderOperation.newDelete(Data.CONTENT_URI)
@@ -101,7 +124,7 @@ class ContactSurface(private val ctx: Context) {
             .withValue(Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE)
             .withValue(Phone.NUMBER, n.number)
             .withValue(Phone.TYPE, Phone.TYPE_CUSTOM)
-            .withValue(Phone.LABEL, if (multi && n.label.isNotBlank()) "${n.label.take(16)} · $status" else status).build()
+            .withValue(Phone.LABEL, if (multi && !isPrivate && n.label.isNotBlank()) "${n.label.take(16)} · $status" else status).build()
         cr.applyBatch(ContactsContract.AUTHORITY, ops)
     }
 

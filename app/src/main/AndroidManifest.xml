@@ -7,6 +7,8 @@
          the build also fails if either shows up in a merged manifest. -->
     <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <!-- WorkManager asks for this for long-running work, which Lineside never does. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
 
     <!-- Optional. Lets loops show by name and status on the phone app's call screen. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -73,6 +75,15 @@
             android:noHistory="true"
             android:taskAffinity=""
             android:theme="@android:style/Theme.NoDisplay" />
+
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            tools:node="remove" />
+
+        <!-- "Keep" on a quiet-loop reminder. -->
+        <receiver
+            android:name=".KeepReceiver"
+            android:exported="false" />
 
         <!-- Lineside's local account for loop contacts. No login, no server, never syncs. -->
         <service

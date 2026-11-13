@@ -58,6 +58,9 @@ class LoopRepo(private val db: Db, private val contacts: ContactSurface, private
         resync(loopId)
     }
 
+    /** Every loop with its history. */
+    suspend fun openLoopsAll(): List<LoopFull> = io { dao.all() }
+
     /** Open (not quiet) loops, most recently active first: the choices for "add to an open loop". */
     suspend fun openLoops(now: Long = clock()): List<LoopFull> = io {
         dao.all().filter { !app.lineside.domain.LoopStatus.isQuiet(it.loop, now) }.sortedByDescending { it.loop.lastActivityAt }

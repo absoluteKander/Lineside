@@ -61,6 +61,21 @@ class LoopStatusTest {
         LoopStatus.counts(listOf(ev(EventKind.MISSED, 3), ev(EventKind.CALL_OUT, 2), ev(EventKind.VOICEMAIL, 3), ev(EventKind.NOTE, 1))),
     )
 
+    @Test fun discreetNeverShowsTheTopic() =
+        assertEquals("Waiting · opened 2h", LoopStatus.statusLine(emptyList(), now, topic = "Oncology results", createdAt = now - 2 * h, discreet = true))
+
+    @Test fun photoStatusIsShort() {
+        assertEquals("VM 4d", LoopStatus.photoStatus(listOf(ev(EventKind.VOICEMAIL, 96)), now))
+        assertEquals("new", LoopStatus.photoStatus(emptyList(), now))
+    }
+
+    @Test fun nudgeOncePerQuietStretch() {
+        val quiet = Loop(id = 1, name = "x", createdAt = 0, lastActivityAt = now - 22 * 24 * h)
+        assertTrue(LoopStatus.shouldNudge(quiet, null, now))
+        assertFalse(LoopStatus.shouldNudge(quiet, now - h, now)) // already nudged this stretch
+        assertFalse(LoopStatus.shouldNudge(quiet.copy(lastActivityAt = now - h), null, now)) // not quiet
+    }
+
     @Test fun initials() {
         assertEquals("P", Initials.of("Dr. Patel's office"))
         assertEquals("NI", Initials.of("Northside Imaging"))

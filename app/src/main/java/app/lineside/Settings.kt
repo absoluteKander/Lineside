@@ -19,6 +19,18 @@ class Settings(ctx: Context) {
         get() = p.getBoolean("unknownCallerPill", true)
         set(v) = p.edit().putBoolean("unknownCallerPill", v).apply()
 
+    /**
+     * Discreet call screen: the phone app shows only "Call back"/"Waiting" and how long ago, never a loop's
+     * topic or who within it is calling, since a ringing phone is readable by anyone nearby.
+     */
+    var discreetCallScreen: Boolean
+        get() = p.getBoolean("discreetCallScreen", false)
+        set(v) = p.edit().putBoolean("discreetCallScreen", v).apply()
+
+    /** When each loop was last nudged as quiet (loop id → time). */
+    fun nudgedAt(loopId: Long): Long? = p.getLong("nudged_$loopId", 0L).takeIf { it > 0 }
+    fun setNudgedAt(loopId: Long, at: Long) = p.edit().putLong("nudged_$loopId", at).apply()
+
     var contactsHintDismissed: Boolean
         get() = p.getBoolean("contactsHintDismissed", false)
         set(v) = p.edit().putBoolean("contactsHintDismissed", v).apply()

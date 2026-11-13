@@ -27,6 +27,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,6 +43,8 @@ fun SettingsScreen(
     onPill: (Boolean) -> Unit,
     onUnknownPill: (Boolean) -> Unit,
     onAllow: (Access) -> Unit,
+    discreet: Boolean,
+    onDiscreet: (Boolean) -> Unit,
 ) {
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding()
@@ -58,6 +62,15 @@ fun SettingsScreen(
                 "Offer to start a loop for unknown numbers",
                 "A \"+ Start a loop\" pill for numbers that aren't in your contacts. It disappears after the call if you ignore it.",
                 unknownPill && pillEnabled, onUnknownPill, enabled = pillEnabled,
+            )
+        }
+        SectionLabel("On the call screen", Modifier.padding(start = 20.dp, top = 20.dp, bottom = 8.dp))
+        Group {
+            Toggle(
+                "Discreet",
+                "A ringing phone is readable by anyone nearby. Discreet shows only \"Call back\" or \"Waiting\" and how long ago, " +
+                    "never a loop's topic or who within it is calling. The loop's name still shows.",
+                discreet, onDiscreet,
             )
         }
         SectionLabel("What Lineside can do", Modifier.padding(start = 20.dp, top = 20.dp, bottom = 4.dp))
@@ -83,12 +96,18 @@ private fun Group(content: @Composable () -> Unit) = Card(
 
 @Composable
 private fun Toggle(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true) =
-    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    // The whole row is the switch: easier to hit, and read as one control by TalkBack.
+    Row(
+        Modifier.fillMaxWidth()
+            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Column(Modifier.weight(1f)) {
             Text(title, fontWeight = FontWeight.SemiBold)
             Text(detail, fontSize = 13.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Switch(checked, onChange, enabled = enabled)
+        Switch(checked, onCheckedChange = null, enabled = enabled)
     }
 
 @Composable

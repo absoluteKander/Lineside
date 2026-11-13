@@ -15,11 +15,16 @@ import app.lineside.data.LoopRepo
 /** Hand-wired dependencies; small enough not to need a DI framework. */
 class App : Application() {
     val db by lazy { Db.open(this) }
-    val contacts by lazy { ContactSurface(this) }
+    val contacts by lazy { ContactSurface(this) { settings.discreetCallScreen } }
     val repo by lazy { LoopRepo(db, contacts) }
     val settings by lazy { Settings(this) }
     /** For work started from call hooks and the pill, which outlive any screen. */
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    override fun onCreate() {
+        super.onCreate()
+        DailyWorker.schedule(this)
+    }
 
     companion object {
         fun of(ctx: Context) = ctx.applicationContext as App

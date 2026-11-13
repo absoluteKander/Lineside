@@ -44,8 +44,20 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     private val app get() = application as App
 
+    /** A loop to open, from a notification (the quiet-loop nudge). */
+    private val openLoop = androidx.compose.runtime.mutableStateOf<Long?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.getLongExtra(QuietNudge.EXTRA_LOOP, -1L).takeIf { it > 0 }?.let { openLoop.value = it }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        intent?.getLongExtra(QuietNudge.EXTRA_LOOP, -1L)?.takeIf { it > 0 }?.let { openLoop.value = it }
+        // Debug builds only: `am start ... --ez runDaily true` runs the daily check now, for testing.
+        if (BuildConfig.DEBUG && intent?.getBooleanExtra("runDaily", false) == true)
+            androidx.work.WorkManager.getInstance(this).enqueue(androidx.work.OneTimeWorkRequestBuilder<DailyWorker>().build())
         enableEdgeToEdge()
         setContent { LinesideTheme { Root() } }
     }
@@ -79,6 +91,8 @@ class MainActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         val loops by repo.observeAll().collectAsStateWithLifecycle(emptyList())
         var screen by remember { mutableStateOf<Screen>(ListScreen) }
+        val toOpen = openLoop.value
+        LaunchedEffect(toOpen) { if (toOpen != null) { screen = LoopView(toOpen); openLoop.value = null } }
         var returnTo by remember { mutableStateOf<Screen>(ListScreen) }
         var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
         LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
@@ -92,6 +106,7 @@ class MainActivity : ComponentActivity() {
         var callsHintDismissed by remember { mutableStateOf(settings.callsHintDismissed) }
         var pillOn by remember { mutableStateOf(settings.pillEnabled) }
         var unknownOn by remember { mutableStateOf(settings.unknownCallerPill) }
+        var discreetOn by remember { mutableStateOf(settings.discreetCallScreen) }
         val askPerms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             permTick++
             if (hasContacts()) scope.launch { repo.resyncAll() }
@@ -130,6 +145,8 @@ class MainActivity : ComponentActivity() {
                 onBack = { screen = ListScreen },
                 onPill = { pillOn = it; settings.pillEnabled = it },
                 onUnknownPill = { unknownOn = it; settings.unknownCallerPill = it },
+                discreet = discreetOn,
+                onDiscreet = { discreetOn = it; settings.discreetCallScreen = it; scope.launch { repo.resyncAll() } },
                 onAllow = allow,
             )
 
