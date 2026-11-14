@@ -81,6 +81,9 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.launch
 
+/** How many of the latest days start open; older days fold to their plate until tapped. */
+private const val OPEN_DAYS = 5
+
 /** Who a number is within a loop. Only matters once a loop has gathered several numbers. */
 private class Parties(numbers: List<LoopNumber>) {
     private val ordered = numbers.sortedBy { it.id }
@@ -109,8 +112,9 @@ fun LoopScreen(
     onTexts: (() -> Unit)? = null,
     /** Opens the texting app on a new message to this number. */
     onReply: (String) -> Unit = {},
-    /** Days the user folded down to their plate, as epoch days. */
+    /** Days the user folded down to their plate, and days they opened that would otherwise start folded; epoch days. */
     folded: Set<Long> = emptySet(),
+    unfolded: Set<Long> = emptySet(),
     onFold: (day: LocalDate, fold: Boolean) -> Unit = { _, _ -> },
 ) {
     val c = Line.c
@@ -128,11 +132,16 @@ fun LoopScreen(
     var latestKey by remember(loop.id) { mutableIntStateOf(0) }
     var pickNumber by remember { mutableStateOf(false) }
 
+    // The latest few days open; older ones start folded so a long loop stays short. The user's own folds win.
+    fun isFolded(di: Int, d: Day): Boolean {
+        val k = d.date.toEpochDay()
+        return if (k in unfolded) false else if (k in folded) true else di >= OPEN_DAYS
+    }
     // List layout: [stations] then per day: [plate] [items, unless folded]. Map each event to the row that shows it.
-    fun shown(d: Day) = if (d.date.toEpochDay() in folded) emptyList() else d.items
-    val rowOfEvent = remember(days, folded) {
+    fun shown(di: Int, d: Day) = if (isFolded(di, d)) emptyList() else d.items
+    val rowOfEvent = remember(days, folded, unfolded) {
         val m = mutableMapOf<Long, Int>(); var i = 1
-        for (d in days) { i++; for (it in shown(d)) { eventsOf(it).forEach { e -> m[e.id] = i }; i++ } }
+        days.forEachIndexed { di, d -> i++; for (it in shown(di, d)) { eventsOf(it).forEach { e -> m[e.id] = i }; i++ } }
         m
     }
     val plateHeight = with(LocalDensity.current) { 46.dp.roundToPx() }
@@ -142,9 +151,9 @@ fun LoopScreen(
         val id = scrollTo ?: return@LaunchedEffect
         rowOfEvent[id]?.let { row -> list.animateScrollToItem(row, -plateHeight); scrollTo = null }
     }
-    val dayOfRow = remember(days, folded) {
+    val dayOfRow = remember(days, folded, unfolded) {
         val m = mutableListOf<LocalDate?>(days.firstOrNull()?.date)
-        for (d in days) { m += d.date; shown(d).forEach { _ -> m += d.date } }
+        days.forEachIndexed { di, d -> m += d.date; shown(di, d).forEach { _ -> m += d.date } }
         m
     }
     val hereDay by remember(days) { derivedStateOf { dayOfRow.getOrNull(list.firstVisibleItemIndex) } }
@@ -165,7 +174,7 @@ fun LoopScreen(
             Box(Modifier.padding(horizontal = 12.dp)) {
                 TimelineMap(stops, lineColor, needs?.id, selectedId, if (list.firstVisibleItemIndex == 0) null else hereDay, latestKey) { e ->
                     selectedId = e.id
-                    days.firstOrNull { d -> d.items.any { e in eventsOf(it) } }?.date?.takeIf { it.toEpochDay() in folded }?.let { onFold(it, false) }
+                    days.indexOfFirst { d -> d.items.any { e in eventsOf(it) } }.takeIf { it >= 0 }?.let { di -> if (isFolded(di, days[di])) onFold(days[di].date, false) }
                     scrollTo = e.id
                 }
             }
@@ -187,14 +196,14 @@ fun LoopScreen(
             days.forEachIndexed { di, day ->
                 stickyHeader(key = "d" + day.date.toEpochDay()) {
                     val pinnedOld = hereDay == day.date && di > 0 && list.firstVisibleItemIndex > 0
-                    val isFolded = day.date.toEpochDay() in folded
+                    val isFolded = isFolded(di, day)
                     DayPlate(day, showLatest = pinnedOld, folded = isFolded, onToggle = { onFold(day.date, !isFolded) }) {
                         selectedId = null
                         scope.launch { list.animateScrollToItem(0) }
                         latestKey++
                     }
                 }
-                val items = shown(day)
+                val items = shown(di, day)
                 items.forEachIndexed { ii, item ->
                     val last = di == days.lastIndex && ii == items.lastIndex
                     item(key = "e" + eventsOf(item).first().id) {

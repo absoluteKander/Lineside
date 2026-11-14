@@ -27,6 +27,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -73,6 +77,7 @@ fun TextsSheet(
     full: LoopFull, granted: Boolean, handingBack: Boolean, canHandBack: Boolean,
     onDismiss: () -> Unit, onLoop: (Boolean) -> Unit, onNumber: (LoopNumber, Boolean) -> Unit,
     onCloseApp: () -> Unit, onLog: () -> Unit,
+    onPick: () -> Unit,
 ) {
     val c = Line.c
     val lineColor = Brand.loop(full.loop.id, c.dark)
@@ -99,8 +104,69 @@ fun TextsSheet(
                 if (full.loop.textsOn && full.numbers.isEmpty())
                     Text("This loop has no numbers yet.", Modifier.padding(16.dp), fontSize = 13.sp, color = c.muted)
             }
+            // The one-off way in: see the loop's texts from the last three months and choose. Switches not needed.
+            Plate {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Or pick texts by hand: Lineside shows this loop's texts from the last ${app.lineside.Texts.PICK_DAYS} days and adds only the ones you choose. " +
+                            "Android asks for text access for that; it's handed back afterwards unless a switch above needs it.",
+                        fontSize = 13.sp, lineHeight = 18.sp, color = c.body,
+                    )
+                    LineButton("Pick texts", onPick, Modifier.fillMaxWidth(), edge = lineColor, enabled = full.numbers.isNotEmpty() && !handingBack)
+                }
+            }
             AccessLine(granted, handingBack, canHandBack)
             LineButton("Text access log", onLog, Modifier.fillMaxWidth(), edge = lineColor)
+        }
+    }
+}
+
+/** The loop's recent texts, each with a hollow box that fills amber when chosen. Already-added ones are marked. */
+@Composable
+fun PickTextsSheet(full: LoopFull, picks: List<app.lineside.Texts.Pick>?, onDismiss: () -> Unit, onAdd: (List<app.lineside.Texts.Pick>) -> Unit) {
+    val c = Line.c
+    val lineColor = Brand.loop(full.loop.id, c.dark)
+    var chosen by rememberSaveable { mutableStateOf(setOf<Long>()) }
+    LineSheet(onDismiss) {
+        SheetBand(full.loop, "Pick texts")
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            when {
+                picks == null -> Text("Looking…", color = c.muted)
+                picks.isEmpty() -> Text("No texts from this loop's numbers in the last ${app.lineside.Texts.PICK_DAYS} days.", color = c.body, lineHeight = 20.sp)
+                else -> LazyColumn(Modifier.heightIn(max = 440.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(picks, key = { it.id }) { p ->
+                        val on = p.id in chosen
+                        Row(
+                            Modifier.fillMaxWidth().background(c.surface, RoundedCornerShape(10.dp))
+                                .toggleable(value = on, enabled = !p.added, role = Role.Checkbox) { chosen = if (it) chosen + p.id else chosen - p.id }
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top,
+                        ) {
+                            Box(
+                                Modifier.padding(top = 2.dp).size(22.dp)
+                                    .background(if (on) c.amber else Color.Transparent, RoundedCornerShape(5.dp))
+                                    .border(2.dp, if (on) c.amber else if (p.added) c.divider else lineColor, RoundedCornerShape(5.dp)),
+                                contentAlignment = Alignment.Center,
+                            ) { if (on || p.added) Icon(LineIcons.Done, null, Modifier.size(14.dp), tint = if (on) c.onAmber else c.muted) }
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Row {
+                                    Text(p.who, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = if (p.added) c.muted else c.ink)
+                                    MonoLabel(if (p.added) "ADDED" else Fmt.dateTime(p.at))
+                                }
+                                Text(p.body, fontSize = 14.sp, lineHeight = 19.sp, color = if (p.added) c.muted else c.body, maxLines = 3,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LineButton("Cancel", onDismiss, Modifier.weight(1f), edge = c.muted)
+                LineButton(
+                    if (chosen.isEmpty()) "Add to timeline" else "Add ${chosen.size} to timeline",
+                    { onAdd(picks.orEmpty().filter { it.id in chosen }) }, Modifier.weight(1.4f), edge = lineColor, enabled = chosen.isNotEmpty(),
+                )
+            }
         }
     }
 }

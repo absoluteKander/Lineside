@@ -155,6 +155,12 @@ class LoopRepo(private val db: Db, private val contacts: ContactSurface, private
         if (key.isEmpty()) emptyList() else dao.loopIdsForKey(key)
     }
 
+    /** The most recently archived loop that had this number, if any. */
+    suspend fun archivedLoopForNumber(number: String): LoopFull? = io {
+        val key = NumberKey.of(number)
+        if (key.isEmpty()) null else dao.archivedLoopIdsForKey(key).mapNotNull { dao.get(it) }.maxByOrNull { it.loop.archivedAt ?: 0L }
+    }
+
     /** Rewrites the contact (name, numbers, status line). Safe to call any time; a no-op without Contacts access. */
     suspend fun resync(id: Long) = io {
         contactLock.withLock {

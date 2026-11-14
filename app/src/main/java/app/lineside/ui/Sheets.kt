@@ -297,7 +297,7 @@ fun CallSheet(loop: Loop, numbers: List<LoopNumber>, onDismiss: () -> Unit, onCa
                     Column(Modifier.weight(1f).padding(start = 14.dp)) {
                         Text(n.label.ifBlank { "Unnamed caller" }, fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 20.sp,
                             color = if (n.label.isBlank()) c.muted else c.ink)
-                        MonoLabel(Fmt.phone(n.number), size = 13.sp)
+                        PhoneLabel(n.number)
                     }
                 }
             }

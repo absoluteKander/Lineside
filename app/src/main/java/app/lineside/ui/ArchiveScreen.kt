@@ -107,7 +107,7 @@ fun ArchivedSheet(full: LoopFull, onDismiss: () -> Unit, onRestore: () -> Unit, 
             if (full.events.isNotEmpty()) Text(LoopStatus.counts(full.events), fontSize = 13.sp, color = c.muted)
             for (n in full.numbers.sortedBy { it.id }) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(n.label.ifBlank { "Unnamed" }, fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = c.ink)
-                MonoLabel(Fmt.phone(n.number), size = 13.sp)
+                PhoneLabel(n.number)
             }
             if (!confirm) {
                 Text(

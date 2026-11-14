@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -186,6 +187,19 @@ fun MiniTimeline(id: Long, events: List<Event>, now: Long, modifier: Modifier = 
 fun MonoLabel(text: String, color: Color = Line.c.muted, size: TextUnit = 11.sp) =
     Text(text, fontFamily = Type.Mono, fontSize = size, color = color, style = TextStyle(fontWeight = FontWeight.Medium))
 
+
+/** A full number in mono, its area and country code dimmed so the part you'd say out loud stands out. */
+@Composable
+fun PhoneLabel(number: String, color: Color = Line.c.body, size: TextUnit = 13.sp) {
+    val s = Fmt.phone(number); val cut = Fmt.localPartStart(s)
+    Text(
+        androidx.compose.ui.text.buildAnnotatedString {
+            withStyle(androidx.compose.ui.text.SpanStyle(color = Line.c.muted)) { append(s.substring(0, cut)) }
+            append(s.substring(cut))
+        },
+        fontFamily = Type.Mono, fontSize = size, color = color, style = TextStyle(fontWeight = FontWeight.Medium),
+    )
+}
 
 /**
  * The one button style: hollow (outlined in [edge]) at rest, filled amber while pressed or [active].

@@ -93,6 +93,14 @@ fun TimelineMap(
         val window = if (fits) total else usable / minGap
         var start by remember(stops.size) { mutableFloatStateOf((total - window).coerceAtLeast(0f)) }
         LaunchedEffect(latestKey, stops.size) { start = (total - window).coerceAtLeast(0f) }
+        // Scrolling the waypoints moves the lens: the day you're reading stays under it (dragging the lens still wins between days).
+        LaunchedEffect(hereDay) {
+            if (fits || hereDay == null) return@LaunchedEffect
+            val day = stops.filter { it.day == hereDay }.ifEmpty { return@LaunchedEffect }
+            val first = day.first().unit; val last = day.last().unit
+            if (last > start + window) start = (last - window + 1f).coerceIn(0f, total - window)
+            else if (first < start) start = (first - 1f).coerceIn(0f, total - window)
+        }
         val scale = when {
             total == 0f -> 0f
             fits -> usable / total

@@ -37,6 +37,10 @@ interface LoopDao {
 
     @Query("SELECT id FROM Loop WHERE archivedAt IS NULL") suspend fun allIds(): List<Long>
 
+    /** Archived loops that had this number: a caller the user may have forgotten. */
+    @Query("SELECT DISTINCT n.loopId FROM LoopNumber n JOIN Loop l ON l.id = n.loopId WHERE n.`key` = :key AND l.archivedAt IS NOT NULL")
+    suspend fun archivedLoopIdsForKey(key: String): List<Long>
+
     @Insert suspend fun insert(loop: Loop): Long
     @Update suspend fun update(loop: Loop)
     @Delete suspend fun delete(loop: Loop)

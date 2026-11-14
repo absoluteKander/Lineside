@@ -200,9 +200,16 @@ private fun InlineField(value: String, onChange: (String) -> Unit, placeholder: 
 
 /** Tapping a waypoint: see it in full, or delete it. */
 @Composable
-fun EventSheet(full: LoopFull, event: Event, onDismiss: () -> Unit, onDelete: () -> Unit) {
+fun EventSheet(
+    full: LoopFull, event: Event, onDismiss: () -> Unit, onDelete: () -> Unit,
+    /** Hands the waypoint to the calendar app, with the date found in its text (if any) already set. */
+    onCalendar: ((Event, app.lineside.domain.WhenParse.When?) -> Unit)? = null,
+) {
     val c = Line.c
     val lineColor = Brand.loop(full.loop.id, c.dark)
+    val found = androidx.compose.runtime.remember(event.text) {
+        if (event.text.isBlank()) null else app.lineside.domain.WhenParse.find(event.text, java.time.ZonedDateTime.now())
+    }
     val who = event.number?.let { num -> full.numbers.firstOrNull { NumberKey.matches(it.number, num) } }
         ?.let { it.label.ifBlank { null } ?: Fmt.last4(it.number) }
     LineSheet(onDismiss) {
@@ -221,6 +228,18 @@ fun EventSheet(full: LoopFull, event: Event, onDismiss: () -> Unit, onDelete: ()
                 Modifier.fillMaxWidth().background(c.surface, RoundedCornerShape(12.dp)).padding(14.dp),
                 fontSize = 16.sp, lineHeight = 23.sp, color = c.ink,
             )
+            // "MRI next Friday 9am" → a calendar entry, prefilled. The found date is shown so there's no surprise.
+            if (onCalendar != null && event.text.isNotBlank()) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LineButton(
+                    "Add to calendar", { onCalendar(event, found) }, Modifier.fillMaxWidth(), edge = lineColor,
+                    leading = { ink -> Icon(LineIcons.Calendar, null, Modifier.size(18.dp), tint = ink) },
+                )
+                Text(
+                    found?.let { w -> if (w.hasTime) Fmt.day(w.start.toLocalDate()) + ", " + Fmt.time(w.start.toInstant().toEpochMilli()) else Fmt.day(w.start.toLocalDate()) + ", all day" }
+                        ?: "No date found in the text; you'll pick one in the calendar.",
+                    fontSize = 12.sp, color = c.muted, modifier = Modifier.padding(start = 2.dp),
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 LineButton("Delete", onDelete, Modifier.weight(1f), edge = c.muted,
                     leading = { ink -> Icon(LineIcons.Trash, null, Modifier.size(18.dp), tint = ink) })

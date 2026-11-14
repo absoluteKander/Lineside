@@ -39,5 +39,6 @@ object LineIcons {
     val ChevronDown = icon("chevron-down", "M6 9l6 6 6-6")
     val ChevronUp = icon("chevron-up", "M18 15l-6-6-6 6")
     val Settings = icon("settings", "M4 21v-7", "M4 10V3", "M12 21v-9", "M12 8V3", "M20 21v-5", "M20 12V3", "M1 14h6", "M9 8h6", "M17 16h6")
+    val Calendar = icon("calendar", "M4 5h16v15H4z", "M4 10h16", "M8 3v4", "M16 3v4")
     val Trash = icon("trash", "M3 6h18", "M8 6V4h8v2", "M19 6l-1 14H6L5 6")
 }

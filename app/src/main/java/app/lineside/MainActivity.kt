@@ -40,6 +40,7 @@ import app.lineside.ui.LoopScreen
 import app.lineside.ui.LoopsScreen
 import app.lineside.ui.NoteSheet
 import app.lineside.ui.SettingsScreen
+import app.lineside.ui.PickTextsSheet
 import app.lineside.ui.TextLogSheet
 import app.lineside.ui.TextsSheet
 import app.lineside.ui.TextsState
@@ -89,6 +90,22 @@ class MainActivity : ComponentActivity() {
     private var lastTextLook = 0L
 
     private fun dial(number: String) = startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", number, null)))
+
+    /** A waypoint becomes a calendar entry in whatever calendar app the user has. Needs no permission; nothing is read back. */
+    private fun calendar(full: LoopFull, e: Event, w: app.lineside.domain.WhenParse.When?) {
+        val title = e.text.lineSequence().first().trim().let { if (it.length > 80) it.take(79).trimEnd() + "…" else it }
+        val i = Intent(Intent.ACTION_INSERT).setData(android.provider.CalendarContract.Events.CONTENT_URI)
+            .putExtra(android.provider.CalendarContract.Events.TITLE, title)
+            .putExtra(android.provider.CalendarContract.Events.DESCRIPTION,
+                listOf(full.loop.name, full.loop.topic).filter { it.isNotBlank() }.joinToString(" · ") + "\n\n" + e.text.trim())
+        if (w != null) {
+            val start = w.start.toInstant().toEpochMilli()
+            i.putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, start)
+            if (w.hasTime) i.putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, start + 60 * 60_000L)
+            else i.putExtra(android.provider.CalendarContract.EXTRA_EVENT_ALL_DAY, true).putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, start + 24 * 60 * 60_000L)
+        }
+        runCatching { startActivity(i) }.onFailure { android.widget.Toast.makeText(this, "No calendar app found.", android.widget.Toast.LENGTH_SHORT).show() }
+    }
 
     /** A new message to this number in whatever texting app the user has. Needs no permission. */
     private fun text(number: String) = runCatching { startActivity(Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", number, null))) }
@@ -163,18 +180,21 @@ class MainActivity : ComponentActivity() {
         var handing by remember { mutableStateOf(Texts.handingBack) }
         LaunchedEffect(loaded) { loaded?.let { Texts.reconcile(ctx, it); handing = Texts.handingBack } }
         val textsGranted = remember(tick, permTick, loaded, handing) { Texts.granted(ctx) }
-        var pendingText by remember { mutableStateOf<Pair<Long, String>?>(null) }
+        // What to do once Android answers the text-permission prompt (switch a number on, or open the picker).
+        var afterSms by remember { mutableStateOf<(suspend () -> Unit)?>(null) }
         val askSms = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
             permTick++
-            val p = pendingText
-            pendingText = null
-            if (ok && p != null) scope.launch { Texts.noteGranted(ctx); repo.setNumberTexts(p.first, p.second, true) }
+            val then = afterSms
+            afterSms = null
+            if (ok && then != null) scope.launch { Texts.noteGranted(ctx); then() }
             else if (!ok) android.widget.Toast.makeText(
-                ctx, "Android didn't allow text access, so nothing was switched on. If it no longer asks, allow it in Settings → Apps → Lineside → Permissions.",
+                ctx, "Android didn't allow text access, so nothing was added or switched on. If it no longer asks, allow it in Settings → Apps → Lineside → Permissions.",
                 android.widget.Toast.LENGTH_LONG,
             ).show()
         }
         val textLog by remember { repo.observeLog() }.collectAsStateWithLifecycle(emptyList())
+        var picking by remember { mutableStateOf(false) }
+        var picks by remember { mutableStateOf<List<Texts.Pick>?>(null) }
         var showTextLog by remember { mutableStateOf(false) }
         // Ends the process too: Android finishes handing the permission back when Lineside's process is gone.
         val closeApp = { finishAndRemoveTask(); android.os.Process.killProcess(android.os.Process.myPid()) }
@@ -243,6 +263,7 @@ class MainActivity : ComponentActivity() {
 
             is LoopView -> {
                 var folded by remember(s.id) { mutableStateOf(settings.folded(s.id)) }
+                var unfolded by remember(s.id) { mutableStateOf(settings.unfolded(s.id)) }
                 val full = loops.firstOrNull { it.loop.id == s.id }
                 if (full == null) { if (loaded != null) screen = ListScreen; return }
                 LoopScreen(
@@ -257,10 +278,12 @@ class MainActivity : ComponentActivity() {
                     onNameNumber = { number, name -> scope.launch { repo.setNumberLabel(full.loop.id, number, name) } },
                     onTexts = if (Texts.available) ({ sheet = "texts" }) else null,
                     onReply = ::text,
-                    folded = folded,
+                    folded = folded, unfolded = unfolded,
                     onFold = { day, fold ->
-                        folded = if (fold) folded + day.toEpochDay() else folded - day.toEpochDay()
-                        settings.setFolded(full.loop.id, folded)
+                        val k = day.toEpochDay()
+                        folded = if (fold) folded + k else folded - k
+                        unfolded = if (fold) unfolded - k else unfolded + k
+                        settings.setFolded(full.loop.id, folded); settings.setUnfolded(full.loop.id, unfolded)
                     },
                 )
                 if (sheet == "texts") TextsSheet(
@@ -271,12 +294,24 @@ class MainActivity : ComponentActivity() {
                         when {
                             !on -> scope.launch { repo.setNumberTexts(full.loop.id, n.number, false) }
                             textsGranted -> scope.launch { repo.setNumberTexts(full.loop.id, n.number, true) }
-                            else -> { pendingText = full.loop.id to n.number; askSms.launch(Manifest.permission.READ_SMS) }
+                            else -> { afterSms = { repo.setNumberTexts(full.loop.id, n.number, true) }; askSms.launch(Manifest.permission.READ_SMS) }
                         }
                     },
                     onCloseApp = closeApp,
                     onLog = { showTextLog = true },
+                    onPick = {
+                        val look: suspend () -> Unit = { picks = null; picking = true; picks = Texts.recent(ctx, full) }
+                        if (textsGranted) scope.launch { look() } else { afterSms = look; askSms.launch(Manifest.permission.READ_SMS) }
+                    },
                 )
+                if (picking) PickTextsSheet(full, picks, onDismiss = { picking = false }) { chosen ->
+                    picking = false
+                    scope.launch {
+                        Texts.addPicked(ctx, full.loop.id, chosen)
+                        handing = Texts.handingBack
+                        android.widget.Toast.makeText(ctx, "Added ${chosen.size} text${if (chosen.size == 1) "" else "s"}.", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
                 Sheets(full, sheet, openEvent, onSheet = { sheet = it }, onEvent = { openEvent = it }, onClosed = { screen = ListScreen })
             }
 
@@ -323,7 +358,8 @@ class MainActivity : ComponentActivity() {
             }
         }
         openEvent?.let { e ->
-            EventSheet(full, e, onDismiss = { onEvent(null) }, onDelete = { scope.launch { repo.deleteEvent(e) }; onEvent(null) })
+            EventSheet(full, e, onDismiss = { onEvent(null) }, onDelete = { scope.launch { repo.deleteEvent(e) }; onEvent(null) },
+                onCalendar = { ev, w -> calendar(full, ev, w) })
         }
     }
 }

@@ -26,6 +26,11 @@ class SharedTest {
         Shared.clean("(555) 014-2299\nHi, it's the lab. Please call back.\nhttps://voice.google.com/u/0/voicemail"),
     )
 
+    @Test fun cleanDropsVoicemailHeaderLines() = assertEquals(
+        "Hi, this is Radiology, your images are ready.",
+        Shared.clean("New voicemail from (555) 014-2299\nTranscript: Hi, this is Radiology, your images are ready.\nhttps://voice.google.com/x"),
+    )
+
     @Test fun numberFromFileName() =
         assertEquals(listOf("+15550142299"), Shared.guess(null, null, "audio/ogg", "Voicemail +15550142299 2026-11-14.ogg").numbers)
 

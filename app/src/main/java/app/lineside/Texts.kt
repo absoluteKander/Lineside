@@ -88,6 +88,42 @@ object Texts {
 
     private data class Msg(val id: Long, val at: Long, val body: String)
 
+    /** A text the user can pick by hand: from one of the loop's numbers, in the last [PICK_DAYS] days. */
+    data class Pick(val id: Long, val at: Long, val body: String, val number: String, val who: String, val added: Boolean)
+
+    const val PICK_DAYS = 90
+
+    /**
+     * Texts from the loop's numbers to pick from, newest first. Needs the permission, but not the switches:
+     * picking is the one-off way in. The look itself goes in the access log.
+     */
+    suspend fun recent(ctx: Context, full: LoopFull): List<Pick> = lock.withLock {
+        if (!granted(ctx)) return@withLock emptyList()
+        val repo = App.of(ctx).repo
+        val known = repo.smsIds(full.loop.id)
+        val since = System.currentTimeMillis() - PICK_DAYS * 24 * 60 * 60_000L
+        val out = mutableListOf<Pick>()
+        for (n in full.numbers.sortedBy { it.id }) for (m in inbox(ctx, n.key, since))
+            out += Pick(m.id, m.at, m.body, n.number, n.label.ifBlank { Fmt.last4(n.number) }, added = m.id in known)
+        repo.log(TextLog(
+            at = System.currentTimeMillis(), loopId = full.loop.id, what = "Looked, to pick by hand",
+            numbers = full.numbers.joinToString(", ") { n -> listOfNotNull(n.label.ifBlank { null }, Fmt.last4(n.number)).joinToString(" ") },
+            found = out.size, added = 0,
+        ))
+        out.sortedByDescending { it.at }
+    }
+
+    /** The picked texts go on the timeline. Then, if no switch anywhere needs the permission, it's handed back. */
+    suspend fun addPicked(ctx: Context, loopId: Long, picks: List<Pick>) {
+        val repo = App.of(ctx).repo
+        val events = picks.filter { !it.added }.distinctBy { it.id }.map {
+            Event(loopId = loopId, kind = EventKind.TEXT, at = it.at, text = it.body, number = it.number, source = EventSource.IMPORTED, smsId = it.id)
+        }
+        repo.addTexts(loopId, events)
+        repo.log(TextLog(at = System.currentTimeMillis(), loopId = loopId, what = "Picked by hand", numbers = picks.map { it.who }.distinct().joinToString(", "), found = picks.size, added = events.size))
+        reconcile(ctx, repo.openLoopsAll())
+    }
+
     /**
      * The only query Lineside makes of the phone's messages: received texts whose sender ends in this number,
      * newer than [since]. Sender formats vary ("+1555…", "555…"), so it asks by the number's last ten digits and

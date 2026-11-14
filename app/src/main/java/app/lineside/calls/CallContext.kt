@@ -12,6 +12,7 @@ import app.lineside.domain.Ball
 import app.lineside.domain.Ago
 import app.lineside.domain.Initials
 import app.lineside.domain.LoopStatus
+import app.lineside.ui.Fmt
 
 /** What Lineside should do for a call, decided in the first moment of it. */
 sealed interface CallPlan {
@@ -35,7 +36,11 @@ object CallContext {
             return content(ctx, number, loopId)?.let { CallPlan.ForLoop(loopId, it) } ?: CallPlan.StayOut
         }
         if (app.contacts.isPermanentContact(number)) return CallPlan.StayOut
-        return CallPlan.Unknown(unknown(ctx, number))
+        // A number from a loop the user archived: they may have forgotten it. Only the loop's name is shown until they restore it.
+        val archived = app.repo.archivedLoopForNumber(number)?.let { f ->
+            LoopChoice(f.loop.id, f.loop.name, "Archived " + Fmt.date(f.loop.archivedAt ?: f.loop.lastActivityAt))
+        }
+        return CallPlan.Unknown(unknown(ctx, number, archived))
     }
 
     suspend fun content(ctx: Context, number: String, loopId: Long?): PillContent? {
@@ -81,13 +86,14 @@ object CallContext {
         return Said("$what · $day", e.text.take(200), theirs)
     }
 
-    private suspend fun unknown(ctx: Context, number: String): PillContent {
+    private suspend fun unknown(ctx: Context, number: String, archived: LoopChoice? = null): PillContent {
         val open = App.of(ctx).repo.openLoops()
         val choices = open.map { f ->
             val ball = if (LoopStatus.ball(f.events) == app.lineside.domain.Ball.CALL_BACK) "Call back" else "Waiting"
             LoopChoice(f.loop.id, f.loop.name, listOf(f.loop.topic, ball).filter { it.isNotBlank() }.joinToString(" · "))
         }
-        return PillContent(null, number, app.lineside.ui.Fmt.phone(number), "+ Start a loop", emptyList(), choices = choices)
+        val label = archived?.let { "Restore ${it.name}?" } ?: "+ Start a loop"
+        return PillContent(null, number, app.lineside.ui.Fmt.phone(number), label, emptyList(), choices = choices, archived = archived)
     }
 
     private fun line(kind: EventKind, text: String, ago: Long): String {

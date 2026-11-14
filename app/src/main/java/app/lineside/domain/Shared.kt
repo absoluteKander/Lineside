@@ -31,6 +31,9 @@ object Shared {
     // "+15550142299", or a North American number however it's punctuated: "(555) 014-2299", "+1 555.014.2299".
     private val numberLike = Regex("""(?<![\w+])(?:\+\d{8,15}|(?:\+?1[\s.\-]?)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})(?!\d)""")
     private val url = Regex("""https?://\S+""")
+    // "New voicemail from (555) 014-2299", "Voicemail from Dr Patel's office:", "Transcript:" — the wrapper, not the words.
+    private val header = Regex("""^\s*(?:new\s+)?voicemail(?:\s+(?:from|received|message)\b.*)?\s*[:.]?\s*$""", RegexOption.IGNORE_CASE)
+    private val transcript = Regex("""^\s*transcript(?:ion)?\s*:\s*""", RegexOption.IGNORE_CASE)
 
     fun guess(text: String?, subject: String?, mime: String?, fileName: String?): Guess {
         val all = listOfNotNull(subject, text, fileName).joinToString("\n")
@@ -51,7 +54,8 @@ object Shared {
 
     /** The message itself: links and lines that are only a phone number dropped, blank runs collapsed. */
     fun clean(text: String): String = text.lines()
-        .map { it.replace(url, "").trim() }
+        .map { it.replace(url, "").replace(transcript, "").trim() }
+        .filterNot { line -> header.matches(line) }
         .filterNot { line -> line.isNotEmpty() && numbers(line).isNotEmpty() && line.count(Char::isLetter) == 0 }
         .joinToString("\n")
         .replace(Regex("\n{3,}"), "\n\n")

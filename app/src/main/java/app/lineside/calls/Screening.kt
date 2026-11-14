@@ -40,7 +40,8 @@ class ScreeningService : CallScreeningService() {
         val content = when (plan) {
             CallPlan.StayOut -> { CallStore.set(app, null); return }
             is CallPlan.ForLoop -> plan.content
-            is CallPlan.Unknown -> if (app.settings.unknownCallerPill) plan.content else { CallStore.set(app, null); return }
+            // The "start a loop" offer is a setting; the offer to restore an archived loop always shows (the user chose to keep it).
+            is CallPlan.Unknown -> if (app.settings.unknownCallerPill || plan.content.archived != null) plan.content else { CallStore.set(app, null); return }
         }
         CallStore.set(app, ActiveCall(number!!, incoming, System.currentTimeMillis(), content.loopId))
         if (!app.settings.pillEnabled) { CallWatcher.start(app); return }

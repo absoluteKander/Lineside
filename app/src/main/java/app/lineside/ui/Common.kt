@@ -70,6 +70,16 @@ object Fmt {
     fun phone(number: String): String =
         android.telephony.PhoneNumberUtils.formatNumber(number, Locale.getDefault().country.ifBlank { "US" }) ?: number
 
+    /** Where the local part of a formatted number starts: the last seven digits. Everything before is area and country code. */
+    fun localPartStart(formatted: String): Int {
+        var digits = 0
+        for (i in formatted.indices.reversed()) {
+            if (formatted[i].isDigit()) digits++
+            if (digits == 7) return if (formatted.count(Char::isDigit) >= 9) i else 0
+        }
+        return 0
+    }
+
     /** "··2299": enough to tell numbers apart when there's no name. */
     fun last4(number: String): String = "··" + number.filter { it.isDigit() }.takeLast(4)
 

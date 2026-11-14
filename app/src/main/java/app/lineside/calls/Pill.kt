@@ -55,6 +55,8 @@ data class PillContent(
     val party: String? = null,
     /** Unknown caller: open loops this number could join, most recently active first. */
     val choices: List<LoopChoice> = emptyList(),
+    /** Unknown caller whose number was in a loop the user archived: offer to bring it back. */
+    val archived: LoopChoice? = null,
     /** The departure board: whose move it is, its status word ("Call back") and the short detail ("VM 4d"). */
     val ball: app.lineside.domain.Ball? = null,
     val status: String = "",
@@ -377,6 +379,7 @@ object Pill {
         bullet?.bind(color, initials, hollow = !known)
         mini?.bind(color, stops, c.needsId, live && known)
         val sign = when {
+            !known && c.archived != null -> "Restore ${c.archived.name}?"
             afterCall && !known -> "+ Who was this?"
             afterCall -> "+ Add a note"
             !known -> "+ Start a loop"
@@ -387,7 +390,7 @@ object Pill {
         val needsYou = known && !afterCall && c.ball == Ball.CALL_BACK
         signTv?.text = sign
         signTv?.setTextColor(when {
-            sign.startsWith("+") -> PillStyle.INK
+            sign.startsWith("+") || sign.startsWith("Restore") -> PillStyle.INK
             needsYou -> PillStyle.AMBER
             c.ball == Ball.WAITING -> PillStyle.WAITING
             else -> PillStyle.INK
@@ -474,9 +477,31 @@ object Pill {
     private fun renderChoices(c: PillContent, all: Boolean = false) {
         val box = choicesBox ?: return
         box.removeAllViews()
-        if (loopId != null || c.choices.isEmpty()) { box.visibility = View.GONE; return }
+        if (loopId != null || (c.choices.isEmpty() && c.archived == null)) { box.visibility = View.GONE; return }
         box.visibility = View.VISIBLE
         val app = box.context
+        // The number was in an archived loop: name it (nothing more of it), and offer to bring it back.
+        c.archived?.let { a ->
+            val color = PillStyle.loop(app, a.id)
+            box.addView(PillStyle.sign(TextView(app), 13f, PillStyle.SOFT).apply { text = "This number was in an archived loop" })
+            box.addView(LinearLayout(app).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                PillStyle.hollow(TextView(app), color).background.let { background = it }
+                minimumHeight = dp(app, 52f)
+                setPadding(dp(app, 6f), dp(app, 6f), dp(app, 12f), dp(app, 6f))
+                isClickable = true
+                addView(BulletView(app, 22f).apply { bind(color, Initials.of(a.name), hollow = true) }, wrap())
+                addView(LinearLayout(app).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(PillStyle.sign(TextView(app), 18f, PillStyle.INK, semi = true).apply { text = a.name; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
+                    addView(TextView(app).apply { text = a.detail; setTextColor(PillStyle.SOFT); setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f); maxLines = 1 })
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(app, 10f) })
+                addView(PillStyle.sign(TextView(app), 14f, PillStyle.INK).apply { text = "Restore" })
+                contentDescription = "Restore ${a.name} and add this call to it"
+                setOnClickListener { restore(app.applicationContext, a) }
+            }, full(8f, app))
+        }
+        if (c.choices.isEmpty()) return
         box.addView(PillStyle.sign(TextView(app), 13f, PillStyle.SOFT).apply { text = "Or add to an open loop" })
         val shown = if (all) c.choices else c.choices.take(3)
         for (ch in shown) {
@@ -523,6 +548,24 @@ object Pill {
         choicesBox?.visibility = View.GONE
         render()
         partyInput?.requestFocus()
+    }
+
+    /** The archived loop comes back, this call goes on it, and the card fills with its context. */
+    private fun restore(app: Context, a: LoopChoice) {
+        val c = content ?: return
+        poke()
+        loopId = a.id
+        val ended = afterCall
+        content = c.copy(loopId = a.id, title = a.name, archived = null, choices = emptyList())
+        App.of(app).scope.launch {
+            val repo = App.of(app).repo
+            repo.restore(a.id)
+            CallStore.update(app) { it.copy(loopId = a.id) }
+            if (ended) CallStore.lastEnded?.takeIf { it.call.number == c.number }?.let { repo.addEvent(it.toEvent(a.id)) }
+            CallContext.content(app, c.number, a.id)?.let { fresh -> main.post { if (loopId == a.id) { content = fresh; notice("Restored ${a.name}."); render() } } }
+        }
+        choicesBox?.visibility = View.GONE
+        render()
     }
 
     private fun undoAssociate(app: Context) {
