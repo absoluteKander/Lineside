@@ -39,7 +39,7 @@ class ShareActivity : ComponentActivity() {
         val guess = Shared.guess(arrived.text, arrived.subject, arrived.fileType ?: arrived.type, arrived.fileName)
         enableEdgeToEdge(statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         setContent {
-            LinesideTheme(app.settings.themeMode) {
+            LinesideTheme(app.settings.themeMode) { LockGate(this) {
                 val loops by app.repo.observeAll().collectAsStateWithLifecycle(null as List<LoopFull>?)
                 ShareScreen(arrived, guess, loops, onCancel = ::finish) { save ->
                     lifecycleScope.launch {
@@ -54,7 +54,7 @@ class ShareActivity : ComponentActivity() {
                         finish()
                     }
                 }
-            }
+            } }
         }
     }
 

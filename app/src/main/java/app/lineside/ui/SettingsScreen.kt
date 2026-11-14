@@ -52,6 +52,7 @@ fun SettingsScreen(
     onTheme: (ThemeMode) -> Unit,
     /** Texts (foss only): null hides the section. */
     texts: TextsState? = null,
+    lock: LockState? = null,
 ) {
     val c = Line.c
     Column(Modifier.fillMaxSize().background(c.ground)) {
@@ -75,6 +76,28 @@ fun SettingsScreen(
                         "never a loop's topic or who within it is calling. The loop's name still shows.",
                     discreet, onDiscreet,
                 )
+            }
+            lock?.let { l ->
+                Section("App lock")
+                Group {
+                    Toggle(
+                        "Lock Lineside",
+                        if (l.available) "Uses your phone's screen lock (fingerprint, face or PIN) when you open Lineside after a while away. Nothing extra to remember, nothing stored here. " +
+                            "Covers Lineside and the share sheet; the pill during your own calls stays as it is."
+                        else "Your phone has no screen lock set. Add one in your phone's settings and the app lock turns on.",
+                        l.on && l.available, l.onLock, enabled = l.available,
+                    )
+                    if (l.on && l.available) {
+                        Divider()
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("Ask again after", fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = c.ink)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                for ((ms, label) in listOf(0L to "Right away", 60_000L to "1 minute", 5 * 60_000L to "5 minutes"))
+                                    Pill(label, l.afterMs == ms) { l.onAfter(ms) }
+                            }
+                        }
+                    }
+                }
             }
             Section("Reminders")
             Group {
@@ -125,6 +148,8 @@ fun SettingsScreen(
         }
     }
 }
+
+class LockState(val on: Boolean, val available: Boolean, val afterMs: Long, val onLock: (Boolean) -> Unit, val onAfter: (Long) -> Unit)
 
 class TextsState(
     val numbers: Int, val granted: Boolean, val handingBack: Boolean, val canHandBack: Boolean,

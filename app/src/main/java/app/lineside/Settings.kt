@@ -9,6 +9,19 @@ import android.content.Context
 class Settings(ctx: Context) {
     private val p = ctx.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
+    /** App lock: on by default (it needs the phone's own screen lock to exist). Off is a choice the user makes. */
+    var appLock: Boolean
+        get() = p.getBoolean("appLock", true)
+        set(v) = p.edit().putBoolean("appLock", v).apply()
+    /** How long Lineside can be away before it asks again. */
+    var lockAfterMs: Long
+        get() = p.getLong("lockAfterMs", 60_000L)
+        set(v) = p.edit().putLong("lockAfterMs", v).apply()
+    /** When Lineside was last put away unlocked; 0 means "ask next time". */
+    var lockedAwayAt: Long
+        get() = p.getLong("lockedAwayAt", 0L)
+        set(v) = p.edit().putLong("lockedAwayAt", v).apply()
+
     /** The pill during calls. Off: Lineside still updates the call screen and logs calls to loops. */
     var pillEnabled: Boolean
         get() = p.getBoolean("pillEnabled", true)

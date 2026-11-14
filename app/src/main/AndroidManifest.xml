@@ -21,6 +21,9 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <!-- Optional. The quiet "Tap to jot a note" for calls answered on the lock screen. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Granted at install, no prompt: lets the app lock ask for the phone's own screen lock (fingerprint, face, PIN). -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
     <!-- Optional. The pill during and just after calls. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 

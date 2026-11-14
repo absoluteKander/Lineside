@@ -34,6 +34,7 @@ import app.lineside.ui.ArchivedSheet
 import app.lineside.ui.CloseLoopDialog
 import app.lineside.ui.EventSheet
 import app.lineside.ui.LinesideTheme
+import app.lineside.ui.LockState
 import app.lineside.ui.LogSheet
 import app.lineside.ui.LoopEditor
 import app.lineside.ui.LoopScreen
@@ -68,7 +69,7 @@ class MainActivity : ComponentActivity() {
             androidx.work.WorkManager.getInstance(this).enqueue(androidx.work.OneTimeWorkRequestBuilder<DailyWorker>().build())
         // Every screen opens on the dark signage band, so status-bar icons are always light.
         enableEdgeToEdge(statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
-        setContent { LinesideTheme(themeMode.value) { Root() } }
+        setContent { LinesideTheme(themeMode.value) { LockGate(this) { Root() } } }
     }
 
     /** Bumped on resume so permission states re-read after a trip to a system screen. */
@@ -164,6 +165,8 @@ class MainActivity : ComponentActivity() {
         var unknownOn by remember { mutableStateOf(settings.unknownCallerPill) }
         var discreetOn by remember { mutableStateOf(settings.discreetCallScreen) }
         var nudgeOn by remember { mutableStateOf(settings.quietNudge) }
+        var lockOn by remember { mutableStateOf(settings.appLock) }
+        var lockAfter by remember { mutableStateOf(settings.lockAfterMs) }
         val askPerms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             permTick++
             if (hasContacts()) scope.launch { repo.resyncAll() }
@@ -255,6 +258,14 @@ class MainActivity : ComponentActivity() {
                 onAllow = allow,
                 theme = themeMode.value,
                 onTheme = { themeMode.value = it; settings.themeMode = it },
+                lock = LockState(
+                    on = lockOn, available = AppLock.available(ctx), afterMs = lockAfter,
+                    onLock = { want ->
+                        if (!want) { lockOn = false; settings.appLock = false }
+                        else AppLock.authenticate(this@MainActivity, "Turn on the app lock") { ok -> if (ok) { lockOn = true; settings.appLock = true; settings.lockedAwayAt = System.currentTimeMillis() } }
+                    },
+                    onAfter = { lockAfter = it; settings.lockAfterMs = it },
+                ),
                 texts = if (!Texts.available) null else TextsState(
                     numbers = Texts.active(loops).size, granted = textsGranted, handingBack = handing,
                     canHandBack = android.os.Build.VERSION.SDK_INT >= 33, onLog = { showTextLog = true }, onCloseApp = closeApp,
