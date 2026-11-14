@@ -88,6 +88,10 @@ class MainActivity : ComponentActivity() {
 
     private fun dial(number: String) = startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", number, null)))
 
+    /** A new message to this number in whatever texting app the user has. Needs no permission. */
+    private fun text(number: String) = runCatching { startActivity(Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", number, null))) }
+        .onFailure { android.widget.Toast.makeText(this, "No texting app found.", android.widget.Toast.LENGTH_SHORT).show() }
+
     private fun hasContacts() =
         checkSelfPermission(Manifest.permission.WRITE_CONTACTS) == PackageManager.PERMISSION_GRANTED
 
@@ -223,6 +227,7 @@ class MainActivity : ComponentActivity() {
                     onEventClick = { openEvent = it },
                     onNameNumber = { number, name -> scope.launch { repo.setNumberLabel(full.loop.id, number, name) } },
                     onTexts = if (Texts.available) ({ sheet = "texts" }) else null,
+                    onReply = ::text,
                 )
                 if (sheet == "texts") TextsSheet(
                     full, textsGranted, handing, android.os.Build.VERSION.SDK_INT >= 33,

@@ -46,10 +46,14 @@ data class MapStop(val event: Event, val unit: Float, val day: LocalDate)
 object TimelineLayout {
     const val DAY_GAP = 1.2f
 
+    /** One stop per event, except texts: one stop per thread (a number's texts on a day), at its latest text. */
     fun stops(events: List<Event>, zone: ZoneId = ZoneId.systemDefault()): List<MapStop> {
         var unit = 0f
         var lastDay: LocalDate? = null
-        return events.sortedBy { it.at }.mapIndexed { i, e ->
+        fun day(e: Event) = Instant.ofEpochMilli(e.at).atZone(zone).toLocalDate()
+        val latestOfThread = events.filter { it.kind == app.lineside.data.EventKind.TEXT }
+            .groupBy { day(it) to app.lineside.domain.Timeline.threadKey(it) }.values.map { t -> t.maxBy { it.at }.id }.toSet()
+        return events.filter { it.kind != app.lineside.data.EventKind.TEXT || it.id in latestOfThread }.sortedBy { it.at }.mapIndexed { i, e ->
             val day = Instant.ofEpochMilli(e.at).atZone(zone).toLocalDate()
             if (i > 0) unit += 1f + if (day != lastDay) DAY_GAP else 0f
             lastDay = day

@@ -46,6 +46,13 @@ class TimelineTest {
         assertEquals(2, Timeline.group(listOf(missed, vm), zone).single().items.size)
     }
 
+    @Test fun textsThreadByNumberWithinADay() {
+        val a1 = ev(EventKind.TEXT, at(11, 9), "a1"); val a2 = ev(EventKind.TEXT, at(11, 15), "a2")
+        val b = ev(EventKind.TEXT, at(11, 12), "b", number = "5552017788")
+        val threads = Timeline.group(listOf(a1, b, a2), zone).single().items.filterIsInstance<TimelineItem.Texts>()
+        assertEquals(listOf(listOf("a1", "a2"), listOf("b")), threads.map { t -> t.texts.map { it.text } })
+    }
+
     @Test fun textsCollapseToOneRowPerDay() {
         val day = Timeline.group(listOf(ev(EventKind.TEXT, at(11, 14, 10)), ev(EventKind.TEXT, at(11, 14, 14)), ev(EventKind.CALL_OUT, at(11, 9))), zone).single()
         assertEquals(2, day.items.size)

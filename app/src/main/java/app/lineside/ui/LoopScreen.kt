@@ -106,6 +106,8 @@ fun LoopScreen(
     onNameNumber: (number: String, name: String) -> Unit,
     /** null where texts aren't possible (the Play build). */
     onTexts: (() -> Unit)? = null,
+    /** Opens the texting app on a new message to this number. */
+    onReply: (String) -> Unit = {},
 ) {
     val c = Line.c
     val loop = full.loop
@@ -182,7 +184,7 @@ fun LoopScreen(
                 day.items.forEachIndexed { ii, item ->
                     val last = di == days.lastIndex && ii == day.items.lastIndex
                     item(key = "e" + eventsOf(item).first().id) {
-                        Waypoint(item, parties, lineColor, needs?.id, selectedId, last, onEventClick) { naming = it }
+                        Waypoint(item, parties, lineColor, needs?.id, selectedId, last, onEventClick, onReply) { naming = it }
                     }
                 }
             }
@@ -331,7 +333,7 @@ private fun DayPlate(day: Day, showLatest: Boolean, onLatest: () -> Unit) {
 }
 
 @Composable
-private fun Waypoint(item: TimelineItem, parties: Parties, lineColor: Color, needsYouId: Long?, selectedId: Long?, last: Boolean, onEventClick: (Event) -> Unit, onName: (String) -> Unit) {
+private fun Waypoint(item: TimelineItem, parties: Parties, lineColor: Color, needsYouId: Long?, selectedId: Long?, last: Boolean, onEventClick: (Event) -> Unit, onReply: (String) -> Unit, onName: (String) -> Unit) {
     val c = Line.c
     val main = eventsOf(item).first()
     val selected = eventsOf(item).any { it.id == selectedId }
@@ -374,7 +376,7 @@ private fun Waypoint(item: TimelineItem, parties: Parties, lineColor: Color, nee
                     if (e.kind == EventKind.VOICEMAIL) Voicemail(e, showTitle = false)
                     else if (e.text.isNotBlank()) Text(e.text, fontSize = 14.sp, lineHeight = 20.sp, color = c.body, modifier = Modifier.clickable { onEventClick(e) })
                 }
-                is TimelineItem.Texts -> Texts(item, parties, onEventClick)
+                is TimelineItem.Texts -> Texts(item, parties, lineColor, onEventClick, onReply) { onName(it) }
             }
         }
     }
@@ -411,21 +413,33 @@ private fun Voicemail(e: Event, showTitle: Boolean = true) {
     }
 }
 
+/** A thread: one number's texts that day. The latest shows; earlier ones fold away under "+N earlier". */
 @Composable
-private fun Texts(item: TimelineItem.Texts, parties: Parties, onEventClick: (Event) -> Unit) {
+private fun Texts(item: TimelineItem.Texts, parties: Parties, lineColor: Color, onEventClick: (Event) -> Unit, onReply: (String) -> Unit, onName: (String) -> Unit) {
     val c = Line.c
-    var open by rememberSaveable(item.at) { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = if (open) "Hide texts" else "Show texts") { open = !open }, verticalAlignment = Alignment.CenterVertically) {
-        val n = item.texts.size
-        Text(if (n == 1) "1 text" else "$n texts", Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = c.ink)
-        MonoLabel(Fmt.time(item.texts.first().at))
-        Icon(if (open) LineIcons.ChevronUp else LineIcons.ChevronDown, null, Modifier.size(18.dp), tint = c.muted)
+    var open by rememberSaveable(item.texts.first().id) { mutableStateOf(false) }
+    val latest = item.texts.last()
+    val earlier = item.texts.dropLast(1)
+    val n = item.texts.size
+    TitleRow(if (n == 1) "Text" else "$n texts", parties.of(latest.number), Fmt.time(latest.at)) { onEventClick(latest) }
+    if (parties.unnamed(latest.number)) NameChip { onName(latest.number!!) }
+    if (earlier.isNotEmpty()) Row(
+        Modifier.clickable(role = Role.Button, onClickLabel = if (open) "Hide earlier texts" else "Show earlier texts") { open = !open },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Sign(if (open) "Hide earlier" else "+${earlier.size} earlier", 13.sp, c.muted)
+        Icon(if (open) LineIcons.ChevronUp else LineIcons.ChevronDown, null, Modifier.size(16.dp), tint = c.muted)
     }
-    if (open) for (t in item.texts) Column(Modifier.fillMaxWidth().clickable { onEventClick(t) }) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MonoLabel(Fmt.time(t.at))
-            parties.of(t.number)?.let { MonoLabel(it.uppercase()) }
+    for (t in if (open) item.texts else listOf(latest)) Row(
+        Modifier.fillMaxWidth().clickable { onEventClick(t) },
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (open) MonoLabel(Fmt.time(t.at), lineColor, 12.sp)
+        Text(t.text.ifBlank { "(no text)" }, Modifier.weight(1f), fontSize = 14.sp, lineHeight = 20.sp, color = if (t.text.isBlank()) c.muted else c.body)
+    }
+    latest.number?.let { number ->
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            LineButton("Reply", { onReply(number) }, height = 34.dp, textSize = 14.sp, edge = lineColor)
         }
-        Text(t.text, fontSize = 14.sp, lineHeight = 20.sp, color = c.body)
     }
 }

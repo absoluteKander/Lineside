@@ -16,8 +16,8 @@ sealed interface TimelineItem {
     /** A call, with what belongs to it: notes jotted during it, or the voicemail a missed call left. */
     data class Call(val call: Event, val attached: List<Event>) : TimelineItem { override val at get() = call.at }
 
-    /** A day's texts, collapsed into one expandable row. */
-    data class Texts(val texts: List<Event>) : TimelineItem { override val at get() = texts.first().at }
+    /** A thread: one number's texts on one day, oldest first. Sits at the time of its latest text. */
+    data class Texts(val texts: List<Event>) : TimelineItem { override val at get() = texts.last().at }
 
     /** A note or voicemail that doesn't belong to a call. */
     data class Single(val event: Event) : TimelineItem { override val at get() = event.at }
@@ -36,6 +36,9 @@ object Timeline {
         events.groupBy { Instant.ofEpochMilli(it.at).atZone(zone).toLocalDate() }
             .toSortedMap(compareByDescending { it })
             .map { (date, dayEvents) -> Day(date, items(dayEvents), LoopStatus.counts(dayEvents)) }
+
+    /** Which thread a text belongs to within its day: the number it came from. */
+    fun threadKey(e: Event) = e.number?.let { app.lineside.data.NumberKey.of(it) }.orEmpty()
 
     private fun items(dayEvents: List<Event>): List<TimelineItem> {
         val calls = mutableListOf<TimelineItem.Call>()
@@ -61,7 +64,7 @@ object Timeline {
         val out = mutableListOf<TimelineItem>()
         calls.mapTo(out) { it.copy(attached = attached[it.call.id].orEmpty()) }
         out += singles
-        if (texts.isNotEmpty()) out += TimelineItem.Texts(texts)
+        texts.groupBy { threadKey(it) }.values.mapTo(out) { TimelineItem.Texts(it) }
         return out.sortedByDescending { it.at }
     }
 }
