@@ -223,7 +223,7 @@ private fun ShapeChoice(k: Kind, chosen: Boolean, lineColor: Color, onClick: () 
 
 /** "When" as a stretch of timeline: stops from Yesterday to Just now. */
 @Composable
-private fun WhenLine(selected: Long, lineColor: Color, onPick: (Long) -> Unit) {
+internal fun WhenLine(selected: Long, lineColor: Color, onPick: (Long) -> Unit) {
     val c = Line.c
     Box(Modifier.fillMaxWidth()) {
         Canvas(Modifier.fillMaxWidth().height(28.dp)) {

@@ -54,6 +54,22 @@
             </intent-filter>
         </service>
 
+        <!-- "Share → Lineside" for a voicemail or a text from another app. Text is kept; audio never is. -->
+        <activity
+            android:name=".ShareActivity"
+            android:exported="true"
+            android:label="Add to a loop"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+        </activity>
+
         <!-- Telecom opens this in the call-screening app when any call ends. Invisible. -->
         <activity
             android:name=".calls.PostCallActivity"
