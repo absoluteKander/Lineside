@@ -214,6 +214,7 @@ class MainActivity : ComponentActivity() {
             )
 
             is LoopView -> {
+                var folded by remember(s.id) { mutableStateOf(settings.folded(s.id)) }
                 val full = loops.firstOrNull { it.loop.id == s.id }
                 if (full == null) { if (loaded != null) screen = ListScreen; return }
                 LoopScreen(
@@ -228,6 +229,11 @@ class MainActivity : ComponentActivity() {
                     onNameNumber = { number, name -> scope.launch { repo.setNumberLabel(full.loop.id, number, name) } },
                     onTexts = if (Texts.available) ({ sheet = "texts" }) else null,
                     onReply = ::text,
+                    folded = folded,
+                    onFold = { day, fold ->
+                        folded = if (fold) folded + day.toEpochDay() else folded - day.toEpochDay()
+                        settings.setFolded(full.loop.id, folded)
+                    },
                 )
                 if (sheet == "texts") TextsSheet(
                     full, textsGranted, handing, android.os.Build.VERSION.SDK_INT >= 33,
@@ -281,6 +287,7 @@ class MainActivity : ComponentActivity() {
             "close" -> CloseLoopDialog(full, onDismiss = { onSheet(null) }) {
                 onSheet(null); onClosed()
                 scope.launch { repo.close(id) }
+                app.settings.forgetLoop(id)
             }
         }
         openEvent?.let { e ->

@@ -59,4 +59,31 @@ class TimelineTest {
         assertEquals(2, (day.items.first { it is TimelineItem.Texts } as TimelineItem.Texts).texts.size)
         assertEquals("1 call · 2 texts", day.counts)
     }
+
+    @Test fun noteJustAfterACallBelongsToIt() {
+        val call = ev(EventKind.CALL_IN, at(11, 21, 32)).copy(durationSec = 24)
+        val note = ev(EventKind.NOTE, at(11, 21, 34), "after the call", number = null)
+        val item = Timeline.group(listOf(call, note), zone).single().items.single() as TimelineItem.Call
+        assertEquals("after the call", item.attached.single().text)
+    }
+
+    @Test fun noteLongAfterACallStandsAlone() {
+        val call = ev(EventKind.CALL_IN, at(11, 9)).copy(durationSec = 60)
+        val note = ev(EventKind.NOTE, at(11, 9, 30), "unrelated", number = null)
+        assertEquals(2, Timeline.group(listOf(call, note), zone).single().items.size)
+    }
+
+    @Test fun backToBackMissedCallsFoldIntoOneLine() {
+        val m = listOf(at(11, 21, 4), at(11, 21, 5), at(11, 21, 26)).map { ev(EventKind.MISSED, it) }
+        val item = Timeline.group(m, zone).single().items.single() as TimelineItem.Calls
+        assertEquals(m.map { it.id }, item.calls.map { it.id })
+    }
+
+    @Test fun differentKindsOrNumbersDontFold() {
+        val evs = listOf(
+            ev(EventKind.MISSED, at(11, 9)), ev(EventKind.CALL_IN, at(11, 10)),
+            ev(EventKind.MISSED, at(11, 11)), ev(EventKind.MISSED, at(11, 12), number = "5552017788"),
+        )
+        assertEquals(4, Timeline.group(evs, zone).single().items.size)
+    }
 }

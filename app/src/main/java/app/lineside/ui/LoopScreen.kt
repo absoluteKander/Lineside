@@ -38,6 +38,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -108,6 +109,9 @@ fun LoopScreen(
     onTexts: (() -> Unit)? = null,
     /** Opens the texting app on a new message to this number. */
     onReply: (String) -> Unit = {},
+    /** Days the user folded down to their plate, as epoch days. */
+    folded: Set<Long> = emptySet(),
+    onFold: (day: LocalDate, fold: Boolean) -> Unit = { _, _ -> },
 ) {
     val c = Line.c
     val loop = full.loop
@@ -124,19 +128,26 @@ fun LoopScreen(
     var latestKey by remember(loop.id) { mutableIntStateOf(0) }
     var pickNumber by remember { mutableStateOf(false) }
 
-    // List layout: [stations] then per day: [plate] [items...]. Map each event to the row that shows it.
-    val rowOfEvent = remember(days) {
+    // List layout: [stations] then per day: [plate] [items, unless folded]. Map each event to the row that shows it.
+    fun shown(d: Day) = if (d.date.toEpochDay() in folded) emptyList() else d.items
+    val rowOfEvent = remember(days, folded) {
         val m = mutableMapOf<Long, Int>(); var i = 1
-        for (d in days) { i++; for (it in d.items) { eventsOf(it).forEach { e -> m[e.id] = i }; i++ } }
+        for (d in days) { i++; for (it in shown(d)) { eventsOf(it).forEach { e -> m[e.id] = i }; i++ } }
         m
     }
-    val dayOfRow = remember(days) {
+    val plateHeight = with(LocalDensity.current) { 46.dp.roundToPx() }
+    // A map tap on a folded day unfolds it; the scroll waits until its rows exist.
+    var scrollTo by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(scrollTo, rowOfEvent) {
+        val id = scrollTo ?: return@LaunchedEffect
+        rowOfEvent[id]?.let { row -> list.animateScrollToItem(row, -plateHeight); scrollTo = null }
+    }
+    val dayOfRow = remember(days, folded) {
         val m = mutableListOf<LocalDate?>(days.firstOrNull()?.date)
-        for (d in days) { m += d.date; d.items.forEach { _ -> m += d.date } }
+        for (d in days) { m += d.date; shown(d).forEach { _ -> m += d.date } }
         m
     }
     val hereDay by remember(days) { derivedStateOf { dayOfRow.getOrNull(list.firstVisibleItemIndex) } }
-    val plateHeight = with(LocalDensity.current) { 46.dp.roundToPx() }
 
     Column(Modifier.fillMaxSize().background(c.ground)) {
         Column(Modifier.fillMaxWidth().background(c.header).statusBarsPadding().padding(start = 4.dp, end = 4.dp, bottom = 12.dp)) {
@@ -154,7 +165,8 @@ fun LoopScreen(
             Box(Modifier.padding(horizontal = 12.dp)) {
                 TimelineMap(stops, lineColor, needs?.id, selectedId, if (list.firstVisibleItemIndex == 0) null else hereDay, latestKey) { e ->
                     selectedId = e.id
-                    rowOfEvent[e.id]?.let { row -> scope.launch { list.animateScrollToItem(row, -plateHeight) } }
+                    days.firstOrNull { d -> d.items.any { e in eventsOf(it) } }?.date?.takeIf { it.toEpochDay() in folded }?.let { onFold(it, false) }
+                    scrollTo = e.id
                 }
             }
         }
@@ -175,14 +187,16 @@ fun LoopScreen(
             days.forEachIndexed { di, day ->
                 stickyHeader(key = "d" + day.date.toEpochDay()) {
                     val pinnedOld = hereDay == day.date && di > 0 && list.firstVisibleItemIndex > 0
-                    DayPlate(day, showLatest = pinnedOld) {
+                    val isFolded = day.date.toEpochDay() in folded
+                    DayPlate(day, showLatest = pinnedOld, folded = isFolded, onToggle = { onFold(day.date, !isFolded) }) {
                         selectedId = null
                         scope.launch { list.animateScrollToItem(0) }
                         latestKey++
                     }
                 }
-                day.items.forEachIndexed { ii, item ->
-                    val last = di == days.lastIndex && ii == day.items.lastIndex
+                val items = shown(day)
+                items.forEachIndexed { ii, item ->
+                    val last = di == days.lastIndex && ii == items.lastIndex
                     item(key = "e" + eventsOf(item).first().id) {
                         Waypoint(item, parties, lineColor, needs?.id, selectedId, last, onEventClick, onReply) { naming = it }
                     }
@@ -227,6 +241,7 @@ private fun NameChip(onClick: () -> Unit) {
 private fun eventsOf(item: TimelineItem): List<Event> = when (item) {
     is TimelineItem.Call -> listOf(item.call) + item.attached
     is TimelineItem.Texts -> item.texts
+    is TimelineItem.Calls -> item.calls
     is TimelineItem.Single -> listOf(item.event)
 }
 
@@ -305,19 +320,22 @@ private fun plateLabel(date: LocalDate): String {
 
 /** A day's name plate. It sits across the line; when you've scrolled back in time it offers "↑ Latest". */
 @Composable
-private fun DayPlate(day: Day, showLatest: Boolean, onLatest: () -> Unit) {
+private fun DayPlate(day: Day, showLatest: Boolean, folded: Boolean, onToggle: () -> Unit, onLatest: () -> Unit) {
     val c = Line.c
     Row(Modifier.fillMaxWidth().background(c.ground).padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 4.dp).height(36.dp)) {
         Row(
             Modifier.weight(1f).fillMaxWidth().height(36.dp)
                 .background(c.surface, if (showLatest) RoundedCornerShape(6.dp, 0.dp, 0.dp, 6.dp) else RoundedCornerShape(6.dp))
                 .border(2.dp, c.plateEdge, if (showLatest) RoundedCornerShape(6.dp, 0.dp, 0.dp, 6.dp) else RoundedCornerShape(6.dp))
+                .clickable(role = Role.Button, onClickLabel = if (folded) "Show this day" else "Fold this day", onClick = onToggle)
                 .padding(horizontal = 10.dp).semantics(mergeDescendants = true) { heading() },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Sign(plateLabel(day.date), 16.sp, c.ink, Modifier.weight(1f), maxLines = 1)
             // Pinned with "↑ Latest" there's no room for the counts; they show whenever the plate isn't pinned.
             if (!showLatest) { Spacer(Modifier.width(8.dp)); Sign(day.counts, 14.sp, c.muted, weight = FontWeight.SemiBold, maxLines = 1) }
+            Spacer(Modifier.width(4.dp))
+            Icon(if (folded) LineIcons.ChevronDown else LineIcons.ChevronUp, null, Modifier.size(16.dp), tint = c.muted)
         }
         if (showLatest) Row(
             Modifier.height(36.dp).background(Brand.Ink, RoundedCornerShape(0.dp, 6.dp, 6.dp, 0.dp))
@@ -334,6 +352,7 @@ private fun DayPlate(day: Day, showLatest: Boolean, onLatest: () -> Unit) {
 
 @Composable
 private fun Waypoint(item: TimelineItem, parties: Parties, lineColor: Color, needsYouId: Long?, selectedId: Long?, last: Boolean, onEventClick: (Event) -> Unit, onReply: (String) -> Unit, onName: (String) -> Unit) {
+    if (item is TimelineItem.Calls) return CallLine(item, parties, lineColor, needsYouId, selectedId, last, onEventClick, onName)
     val c = Line.c
     val main = eventsOf(item).first()
     val selected = eventsOf(item).any { it.id == selectedId }
@@ -377,9 +396,70 @@ private fun Waypoint(item: TimelineItem, parties: Parties, lineColor: Color, nee
                     else if (e.text.isNotBlank()) Text(e.text, fontSize = 14.sp, lineHeight = 20.sp, color = c.body, modifier = Modifier.clickable { onEventClick(e) })
                 }
                 is TimelineItem.Texts -> Texts(item, parties, lineColor, onEventClick, onReply) { onName(it) }
+                is TimelineItem.Calls -> Unit // drawn by CallLine
             }
         }
     }
+}
+
+/** Calls that carry nothing (no note, no voicemail): one line on the line, no card. Several fold into one. */
+@Composable
+private fun CallLine(
+    item: TimelineItem.Calls, parties: Parties, lineColor: Color, needsYouId: Long?, selectedId: Long?, last: Boolean,
+    onEventClick: (Event) -> Unit, onName: (String) -> Unit,
+) {
+    val c = Line.c
+    val first = item.calls.first(); val latest = item.calls.last(); val n = item.calls.size
+    val selected = item.calls.any { it.id == selectedId }
+    val needs = item.calls.any { it.id == needsYouId }
+    var open by rememberSaveable(first.id) { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(end = 16.dp)) {
+        Box(Modifier.width(56.dp).fillMaxHeight().drawBehind {
+            val x = size.width / 2 + 4.dp.toPx(); val my = 22.dp.toPx()
+            drawLine(lineColor, Offset(x, 0f), Offset(x, if (last) my else size.height), strokeWidth = 6.dp.toPx())
+        }.heightIn(min = 44.dp)) {
+            Canvas(Modifier.padding(start = 4.dp).size(52.dp, 44.dp)) {
+                val m = Offset(size.width / 2, 22.dp.toPx())
+                if (selected) drawCircle(c.amber.copy(alpha = 0.4f), 16.dp.toPx(), m)
+                drawCircle(c.ground, 11.dp.toPx(), m)
+                drawStop(stopShape(latest), m, (if (needs || selected) 18 else 14).dp.toPx(), lineColor, c.ground, c.amber, needsYou = needs, noteFill = c.ground)
+            }
+        }
+        Column(Modifier.weight(1f).padding(start = 4.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                Modifier.fillMaxWidth().clickable(
+                    role = Role.Button,
+                    onClickLabel = if (n > 1) (if (open) "Hide each call" else "Show each call") else "Call details",
+                ) { if (n > 1) open = !open else onEventClick(latest) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    listOfNotNull(callsLabel(latest.kind, n), parties.of(latest.number)).joinToString(" · "), Modifier.weight(1f),
+                    fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = if (needs || selected) c.ink else c.body, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                MonoLabel(if (n == 1) Fmt.time(latest.at) + (latest.durationSec?.let { " · " + Fmt.duration(it) } ?: "") else timeRange(first.at, latest.at))
+                if (n > 1) Icon(if (open) LineIcons.ChevronUp else LineIcons.ChevronDown, null, Modifier.padding(start = 2.dp).size(16.dp), tint = c.muted)
+            }
+            if (parties.unnamed(latest.number)) NameChip { onName(latest.number!!) }
+            if (open) for (call in item.calls.reversed()) Row(Modifier.fillMaxWidth().clickable { onEventClick(call) }) {
+                MonoLabel(Fmt.time(call.at) + (call.durationSec?.let { " · " + Fmt.duration(it) } ?: ""), lineColor, 12.sp)
+            }
+        }
+    }
+}
+
+private fun callsLabel(kind: EventKind, n: Int) = when (kind) {
+    EventKind.MISSED -> if (n == 1) "Missed call" else "$n missed calls"
+    EventKind.CALL_IN -> if (n == 1) "They called" else "They called $n times"
+    EventKind.CALL_OUT -> if (n == 1) "You called" else "You called $n times"
+    else -> Fmt.kind(kind)
+}
+
+/** "9:04–9:26 PM", or "11:50 AM–12:10 PM" across noon. */
+private fun timeRange(from: Long, to: Long): String {
+    val a = Fmt.time(from); val b = Fmt.time(to)
+    if (a == b) return b
+    return if (a.takeLast(2) == b.takeLast(2)) a.dropLast(3) + "–" + b else "$a–$b"
 }
 
 @Composable

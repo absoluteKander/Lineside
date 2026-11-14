@@ -33,6 +33,12 @@ class Settings(ctx: Context) {
         set(v) = p.edit().putBoolean("quietNudge", v).apply()
 
     /** When each loop was last nudged as quiet (loop id → time). */
+    /** Days the user folded on a loop's timeline, as epoch days. */
+    fun folded(loopId: Long): Set<Long> = p.getStringSet("folded_$loopId", emptySet()).orEmpty().mapNotNull { it.toLongOrNull() }.toSet()
+    fun setFolded(loopId: Long, days: Set<Long>) = p.edit().putStringSet("folded_$loopId", days.map { it.toString() }.toSet()).apply()
+    /** A closed loop leaves nothing behind here either. */
+    fun forgetLoop(loopId: Long) = p.edit().remove("folded_$loopId").remove("nudged_$loopId").apply()
+
     fun nudgedAt(loopId: Long): Long? = p.getLong("nudged_$loopId", 0L).takeIf { it > 0 }
     fun setNudgedAt(loopId: Long, at: Long) = p.edit().putLong("nudged_$loopId", at).apply()
 
