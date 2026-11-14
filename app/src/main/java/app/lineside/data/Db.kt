@@ -11,9 +11,10 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [Loop::class, LoopNumber::class, Event::class, TextLog::class],
-    version = 2, exportSchema = true,
+    version = 3, exportSchema = true,
     // 2: texts switches on loops and numbers, smsId on events, the text access log.
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    // 3: archivedAt on loops.
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 abstract class Db : RoomDatabase() {
     abstract fun loops(): LoopDao

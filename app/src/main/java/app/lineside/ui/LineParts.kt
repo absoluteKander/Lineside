@@ -159,7 +159,8 @@ fun needsYouEvent(events: List<Event>): Event? =
 fun MiniTimeline(id: Long, events: List<Event>, now: Long, modifier: Modifier = Modifier) {
     val c = Line.c
     val color = Brand.loop(id, c.dark)
-    val recent = events.sortedBy { it.at }.takeLast(6)
+    // Same stops as the loop's own map: a day's texts from one number are one stop.
+    val recent = TimelineLayout.stops(events).map { it.event }.takeLast(6)
     val needs = needsYouEvent(events)
     val status = LoopStatus.photoStatus(events, now).uppercase()
     val described = if (recent.isEmpty()) "No activity yet" else "Recent activity: " + recent.joinToString(", ") { Fmt.kind(it.kind) }
@@ -218,6 +219,16 @@ fun LineButton(
     }
 }
 
+
+/** A siding: the line branches off and stops at a buffer, parked rather than ended. For "Archive". */
+@Composable
+fun ArchiveGlyph(ink: Color) = Canvas(Modifier.size(width = 20.dp, height = 14.dp)) {
+    val w = 3.dp.toPx(); val low = size.height - w / 2; val high = w / 2 + 1.dp.toPx()
+    drawLine(ink, Offset(0f, low), Offset(size.width * 0.35f, low), strokeWidth = w)
+    drawLine(ink, Offset(size.width * 0.35f, low), Offset(size.width * 0.6f, high), strokeWidth = w)
+    drawLine(ink, Offset(size.width * 0.6f, high), Offset(size.width - w / 2, high), strokeWidth = w)
+    drawLine(ink, Offset(size.width - w / 2, 0f), Offset(size.width - w / 2, high + 4.dp.toPx()), strokeWidth = w)
+}
 
 /** The line carrying on: a solid stretch, then dashes. For "Keep". */
 @Composable

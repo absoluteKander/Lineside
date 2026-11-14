@@ -29,6 +29,8 @@ import app.lineside.calls.Pill
 import app.lineside.data.Event
 import app.lineside.data.EventKind
 import app.lineside.data.LoopFull
+import app.lineside.ui.ArchiveScreen
+import app.lineside.ui.ArchivedSheet
 import app.lineside.ui.CloseLoopDialog
 import app.lineside.ui.EventSheet
 import app.lineside.ui.LinesideTheme
@@ -101,12 +103,14 @@ class MainActivity : ComponentActivity() {
     private data class LoopView(val id: Long) : Screen
     private data class Edit(val id: Long?) : Screen
     private data object SettingsView : Screen
+    private data object ArchiveView : Screen
 
     private fun encode(s: Screen) = when (s) {
-        ListScreen -> "list"; SettingsView -> "settings"; is LoopView -> "loop:${s.id}"; is Edit -> s.id?.let { "edit:$it" } ?: "new"
+        ListScreen -> "list"; SettingsView -> "settings"; ArchiveView -> "archive"; is LoopView -> "loop:${s.id}"; is Edit -> s.id?.let { "edit:$it" } ?: "new"
     }
     private fun decode(k: String): Screen = when {
         k == "settings" -> SettingsView
+        k == "archive" -> ArchiveView
         k == "new" -> Edit(null)
         k.startsWith("loop:") -> LoopView(k.removePrefix("loop:").toLong())
         k.startsWith("edit:") -> Edit(k.removePrefix("edit:").toLong())
@@ -120,6 +124,8 @@ class MainActivity : ComponentActivity() {
         // null until the database has answered: a restored screen must not mistake "not loaded yet" for "deleted".
         val loaded by repo.observeAll().collectAsStateWithLifecycle(null as List<LoopFull>?)
         val loops = loaded.orEmpty()
+        val archived by remember { repo.observeArchived() }.collectAsStateWithLifecycle(null as List<LoopFull>?)
+        var openArchived by remember { mutableStateOf<Long?>(null) }
         // Survives rotation and theme changes: saved as "list", "loop:<id>", "edit:<id>", "new", "settings".
         var screen by rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<Screen, String>({ encode(it) }, { decode(it) })) {
             mutableStateOf<Screen>(ListScreen)
@@ -193,7 +199,29 @@ class MainActivity : ComponentActivity() {
                 onAllowCalls = { allow(Access.CALLS) },
                 onDismissCallsHint = { callsHintDismissed = true; settings.callsHintDismissed = true },
                 onSettings = { screen = SettingsView },
+                archivedCount = archived.orEmpty().size,
+                onArchive = { screen = ArchiveView },
             )
+
+            ArchiveView -> {
+                ArchiveScreen(archived, onBack = { screen = ListScreen }, onOpen = { openArchived = it.loop.id })
+                archived.orEmpty().firstOrNull { it.loop.id == openArchived }?.let { f ->
+                    ArchivedSheet(
+                        f, onDismiss = { openArchived = null },
+                        onRestore = {
+                            openArchived = null
+                            scope.launch { repo.restore(f.loop.id) }
+                            android.widget.Toast.makeText(ctx, "${f.loop.name} is back in your loops.", android.widget.Toast.LENGTH_SHORT).show()
+                            if (archived.orEmpty().size <= 1) screen = ListScreen
+                        },
+                        onDelete = {
+                            openArchived = null
+                            scope.launch { repo.close(f.loop.id) }
+                            settings.forgetLoop(f.loop.id)
+                        },
+                    )
+                }
+            }
 
             SettingsView -> SettingsScreen(
                 pillEnabled = pillOn, unknownPill = unknownOn, granted = granted,
@@ -284,7 +312,11 @@ class MainActivity : ComponentActivity() {
                 scope.launch { repo.addEvent(Event(loopId = id, kind = kind, at = System.currentTimeMillis() - ago, number = number, text = text)) }
                 onSheet(null)
             }
-            "close" -> CloseLoopDialog(full, onDismiss = { onSheet(null) }) {
+            "close" -> CloseLoopDialog(full, onDismiss = { onSheet(null) }, onArchive = {
+                onSheet(null); onClosed()
+                scope.launch { repo.archive(id) }
+                android.widget.Toast.makeText(this, "Archived. Find it at the bottom of your loops.", android.widget.Toast.LENGTH_SHORT).show()
+            }) {
                 onSheet(null); onClosed()
                 scope.launch { repo.close(id) }
                 app.settings.forgetLoop(id)

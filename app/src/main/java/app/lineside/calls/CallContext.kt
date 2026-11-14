@@ -65,7 +65,7 @@ object CallContext {
             status = if (ball == Ball.CALL_BACK) "Call back" else "Waiting",
             detail = if (hasContact) status.substringAfter(" · ") else "new",
             topic = full.loop.topic,
-            stops = full.events.sortedBy { it.at }.takeLast(8),
+            stops = app.lineside.ui.TimelineLayout.stops(full.events).map { it.event }.takeLast(8),
             needsId = if (ball == Ball.CALL_BACK) LoopStatus.lastContact(full.events)?.id else null,
             said = said.take(2),
         )

@@ -128,6 +128,27 @@ class LoopRepo(private val db: Db, private val contacts: ContactSurface, private
         }
     }
 
+    fun observeArchived(): Flow<List<LoopFull>> = dao.observeArchived()
+
+    /**
+     * Archive instead of delete: everything stays, but the loop leaves the list and its contact is removed, so
+     * its numbers ring as plain numbers again. Its text switches go off (restoring doesn't turn them back on).
+     */
+    suspend fun archive(id: Long) = io {
+        contactLock.withLock {
+            val full = dao.get(id) ?: return@withLock
+            contacts.delete(full.loop.rawContactId)
+            dao.archive(id, clock())
+            dao.clearTexts(id)
+        }
+    }
+
+    /** Back in the list, contact and all. Counts as "kept" so it doesn't land straight in the quiet list. */
+    suspend fun restore(id: Long) = io {
+        dao.unarchive(id, clock())
+        resync(id)
+    }
+
     /** Loops that own this number, for matching calls (M3). */
     suspend fun loopsForNumber(number: String): List<Long> = io {
         val key = NumberKey.of(number)
@@ -138,6 +159,7 @@ class LoopRepo(private val db: Db, private val contacts: ContactSurface, private
     suspend fun resync(id: Long) = io {
         contactLock.withLock {
             val full = dao.get(id) ?: return@withLock
+            if (full.loop.archivedAt != null) return@withLock // archived loops have no contact
             val rawId = contacts.sync(full, clock())
             if (rawId != null && rawId != full.loop.rawContactId) dao.setRawContact(id, rawId)
         }

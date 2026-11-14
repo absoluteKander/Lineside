@@ -27,6 +27,11 @@ data class Loop(
     val rawContactId: Long? = null,
     /** Texts for this loop: the first of two switches (the loop, then each number). Off until the user turns it on. */
     @ColumnInfo(defaultValue = "0") val textsOn: Boolean = false,
+    /**
+     * Set when the user archives the loop instead of deleting it: everything is kept, but the loop leaves the list,
+     * call matching, the contact surface and text importing until it's restored.
+     */
+    val archivedAt: Long? = null,
 )
 
 @Entity(

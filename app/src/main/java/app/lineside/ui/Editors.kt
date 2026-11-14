@@ -230,9 +230,9 @@ fun EventSheet(full: LoopFull, event: Event, onDismiss: () -> Unit, onDelete: ()
     }
 }
 
-/** Closing removes everything Lineside holds for the loop. Say exactly that. */
+/** Closing removes everything Lineside holds for the loop; archiving keeps it out of the way. Say exactly that. */
 @Composable
-fun CloseLoopDialog(full: LoopFull, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+fun CloseLoopDialog(full: LoopFull, onDismiss: () -> Unit, onArchive: () -> Unit, onConfirm: () -> Unit) {
     val c = Line.c
     val lineColor = Brand.loop(full.loop.id, c.dark)
     LineSheet(onDismiss) {
@@ -245,14 +245,20 @@ fun CloseLoopDialog(full: LoopFull, onDismiss: () -> Unit, onConfirm: () -> Unit
                 drawLine(lineColor, Offset(end, 0f), Offset(end, size.height), strokeWidth = w)
             }
             Text(
-                "This removes the loop and everything in it: its calls, notes and messages, and its entry in your contacts. " +
+                "Closing removes the loop and everything in it: its calls, notes and messages, and its entry in your contacts. " +
                     "Your phone's own call history isn't touched.",
+                fontSize = 15.sp, lineHeight = 21.sp, color = c.body,
+            )
+            Text(
+                "Or archive it, if they might come back. Everything is kept, out of the way: it leaves your loops and contacts, " +
+                    "Lineside stops recognising its numbers and stops adding texts. Restore it from the Archive any time.",
                 fontSize = 15.sp, lineHeight = 21.sp, color = c.body,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 LineButton("Keep it", onDismiss, Modifier.weight(1f), edge = c.muted, leading = { ink -> KeepGlyph(ink) })
-                LineButton("Close loop", onConfirm, Modifier.weight(1f), edge = lineColor, leading = { ink -> TerminusGlyph(ink) })
+                LineButton("Archive", onArchive, Modifier.weight(1f), edge = lineColor, leading = { ink -> ArchiveGlyph(ink) })
             }
+            LineButton("Close loop", onConfirm, Modifier.fillMaxWidth(), edge = lineColor, leading = { ink -> TerminusGlyph(ink) })
         }
     }
 }

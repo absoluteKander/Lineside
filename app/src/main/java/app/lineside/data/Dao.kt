@@ -13,8 +13,15 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface LoopDao {
-    @Transaction @Query("SELECT * FROM Loop ORDER BY lastActivityAt DESC")
+    // Archived loops are left out of everything except the archive itself.
+    @Transaction @Query("SELECT * FROM Loop WHERE archivedAt IS NULL ORDER BY lastActivityAt DESC")
     fun observeAll(): Flow<List<LoopFull>>
+
+    @Transaction @Query("SELECT * FROM Loop WHERE archivedAt IS NOT NULL ORDER BY archivedAt DESC")
+    fun observeArchived(): Flow<List<LoopFull>>
+
+    @Query("UPDATE Loop SET archivedAt = :at, rawContactId = NULL, textsOn = 0 WHERE id = :id") suspend fun archive(id: Long, at: Long)
+    @Query("UPDATE Loop SET archivedAt = NULL, keptAt = :at WHERE id = :id") suspend fun unarchive(id: Long, at: Long)
 
     @Transaction @Query("SELECT * FROM Loop WHERE id = :id")
     fun observe(id: Long): Flow<LoopFull?>
@@ -22,13 +29,13 @@ interface LoopDao {
     @Transaction @Query("SELECT * FROM Loop WHERE id = :id")
     suspend fun get(id: Long): LoopFull?
 
-    @Transaction @Query("SELECT * FROM Loop")
+    @Transaction @Query("SELECT * FROM Loop WHERE archivedAt IS NULL")
     suspend fun all(): List<LoopFull>
 
-    @Query("SELECT DISTINCT loopId FROM LoopNumber WHERE `key` = :key")
+    @Query("SELECT DISTINCT n.loopId FROM LoopNumber n JOIN Loop l ON l.id = n.loopId WHERE n.`key` = :key AND l.archivedAt IS NULL")
     suspend fun loopIdsForKey(key: String): List<Long>
 
-    @Query("SELECT id FROM Loop") suspend fun allIds(): List<Long>
+    @Query("SELECT id FROM Loop WHERE archivedAt IS NULL") suspend fun allIds(): List<Long>
 
     @Insert suspend fun insert(loop: Loop): Long
     @Update suspend fun update(loop: Loop)

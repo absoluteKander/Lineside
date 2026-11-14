@@ -64,6 +64,8 @@ fun LoopsScreen(
     onAllowCalls: () -> Unit,
     onDismissCallsHint: () -> Unit,
     onSettings: () -> Unit,
+    archivedCount: Int = 0,
+    onArchive: () -> Unit = {},
 ) {
     val c = Line.c
     val (quiet, open) = loops.partition { LoopStatus.isQuiet(it.loop, now) }
@@ -97,6 +99,16 @@ fun LoopsScreen(
             }
             if (quiet.isNotEmpty()) item { SectionSign("Quiet · 3+ weeks") }
             items(quiet, key = { it.loop.id }) { QuietRow(it, now, { onOpen(it.loop.id) }, { onKeep(it.loop.id) }, { onClose(it) }) }
+            if (archivedCount > 0) item {
+                Row(
+                    Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onArchive).padding(horizontal = 20.dp, vertical = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ArchiveGlyph(c.muted)
+                    Spacer(Modifier.width(10.dp))
+                    Sign("Archive · $archivedCount", 15.sp, c.muted, weight = FontWeight.SemiBold)
+                }
+            }
         }
         NewLoopButton(onNew, Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(18.dp))
     }
