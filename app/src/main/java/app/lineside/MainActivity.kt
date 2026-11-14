@@ -38,6 +38,9 @@ import app.lineside.ui.LoopScreen
 import app.lineside.ui.LoopsScreen
 import app.lineside.ui.NoteSheet
 import app.lineside.ui.SettingsScreen
+import app.lineside.ui.TextLogSheet
+import app.lineside.ui.TextsSheet
+import app.lineside.ui.TextsState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -74,7 +77,14 @@ class MainActivity : ComponentActivity() {
         Pill.finishIfAfterCall()
         // Status lines age ("VM 4d" → "VM 5d"); refresh the call-screen copies whenever the app is opened.
         lifecycleScope.launch { app.repo.resyncAll() }
+        // Texts from switched-on numbers. At most every couple of minutes: each look is a line in the access log.
+        if (System.currentTimeMillis() - lastTextLook > 2 * 60_000) {
+            lastTextLook = System.currentTimeMillis()
+            lifecycleScope.launch { Texts.importNow(this@MainActivity, "Opened Lineside") }
+        }
     }
+
+    private var lastTextLook = 0L
 
     private fun dial(number: String) = startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", number, null)))
 
@@ -136,7 +146,28 @@ class MainActivity : ComponentActivity() {
             a.permissions()?.let { askPerms.launch(it) } ?: a.systemIntent(this@MainActivity)?.let { openSystem.launch(it) }
         }
 
-        var sheet by remember { mutableStateOf<String?>(null) } // "note", "log", "close"
+        var sheet by remember { mutableStateOf<String?>(null) } // "note", "log", "close", "texts"
+
+        // ---- Texts (foss): two switches, Android's permission only at the first number, handed back when unused. ----
+        val ctx = this@MainActivity
+        var handing by remember { mutableStateOf(Texts.handingBack) }
+        LaunchedEffect(loaded) { loaded?.let { Texts.reconcile(ctx, it); handing = Texts.handingBack } }
+        val textsGranted = remember(tick, permTick, loaded, handing) { Texts.granted(ctx) }
+        var pendingText by remember { mutableStateOf<Pair<Long, String>?>(null) }
+        val askSms = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+            permTick++
+            val p = pendingText
+            pendingText = null
+            if (ok && p != null) scope.launch { Texts.noteGranted(ctx); repo.setNumberTexts(p.first, p.second, true) }
+            else if (!ok) android.widget.Toast.makeText(
+                ctx, "Android didn't allow text access, so nothing was switched on. If it no longer asks, allow it in Settings → Apps → Lineside → Permissions.",
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+        }
+        val textLog by remember { repo.observeLog() }.collectAsStateWithLifecycle(emptyList())
+        var showTextLog by remember { mutableStateOf(false) }
+        // Ends the process too: Android finishes handing the permission back when Lineside's process is gone.
+        val closeApp = { finishAndRemoveTask(); android.os.Process.killProcess(android.os.Process.myPid()) }
         var openEvent by remember { mutableStateOf<Event?>(null) }
 
         BackHandler(enabled = screen != ListScreen) {
@@ -172,6 +203,10 @@ class MainActivity : ComponentActivity() {
                 onAllow = allow,
                 theme = themeMode.value,
                 onTheme = { themeMode.value = it; settings.themeMode = it },
+                texts = if (!Texts.available) null else TextsState(
+                    numbers = Texts.active(loops).size, granted = textsGranted, handingBack = handing,
+                    canHandBack = android.os.Build.VERSION.SDK_INT >= 33, onLog = { showTextLog = true }, onCloseApp = closeApp,
+                ),
             )
 
             is LoopView -> {
@@ -187,6 +222,21 @@ class MainActivity : ComponentActivity() {
                     onClose = { sheet = "close" },
                     onEventClick = { openEvent = it },
                     onNameNumber = { number, name -> scope.launch { repo.setNumberLabel(full.loop.id, number, name) } },
+                    onTexts = if (Texts.available) ({ sheet = "texts" }) else null,
+                )
+                if (sheet == "texts") TextsSheet(
+                    full, textsGranted, handing, android.os.Build.VERSION.SDK_INT >= 33,
+                    onDismiss = { sheet = null },
+                    onLoop = { on -> scope.launch { repo.setLoopTexts(full.loop.id, on) } },
+                    onNumber = { n, on ->
+                        when {
+                            !on -> scope.launch { repo.setNumberTexts(full.loop.id, n.number, false) }
+                            textsGranted -> scope.launch { repo.setNumberTexts(full.loop.id, n.number, true) }
+                            else -> { pendingText = full.loop.id to n.number; askSms.launch(Manifest.permission.READ_SMS) }
+                        }
+                    },
+                    onCloseApp = closeApp,
+                    onLog = { showTextLog = true },
                 )
                 Sheets(full, sheet, openEvent, onSheet = { sheet = it }, onEvent = { openEvent = it }, onClosed = { screen = ListScreen })
             }
@@ -206,6 +256,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+        if (showTextLog) TextLogSheet(textLog, loops.associate { it.loop.id to it.loop.name }) { showTextLog = false }
     }
 
     @Composable

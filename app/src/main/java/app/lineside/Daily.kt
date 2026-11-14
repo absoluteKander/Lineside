@@ -30,6 +30,7 @@ class DailyWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx,
     override suspend fun doWork(): Result {
         val app = App.of(applicationContext)
         app.repo.resyncAll()
+        Texts.importNow(app, "Daily check")
         val now = System.currentTimeMillis()
         if (app.settings.quietNudge && QuietNudge.canPost(app)) for (l in app.repo.openLoopsAll()) {
             if (LoopStatus.shouldNudge(l.loop, app.settings.nudgedAt(l.loop.id), now)) {

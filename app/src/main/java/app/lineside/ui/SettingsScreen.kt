@@ -50,6 +50,8 @@ fun SettingsScreen(
     onQuietNudge: (Boolean) -> Unit,
     theme: ThemeMode,
     onTheme: (ThemeMode) -> Unit,
+    /** Texts (foss only): null hides the section. */
+    texts: TextsState? = null,
 ) {
     val c = Line.c
     Column(Modifier.fillMaxSize().background(c.ground)) {
@@ -93,6 +95,22 @@ fun SettingsScreen(
                     Text("The signage band at the top stays dark either way.", fontSize = 13.sp, lineHeight = 18.sp, color = c.muted)
                 }
             }
+            texts?.let { t ->
+                Section("Texts")
+                Group {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            if (t.numbers == 0) "Texts aren't added to any loop. To add them, open a loop and tap Texts. " +
+                                "Without that, a text only gets into Lineside if you share it here."
+                            else "Adding texts from ${t.numbers} number${if (t.numbers == 1) "" else "s"}. Turn them off in each loop's Texts.",
+                            fontSize = 13.sp, lineHeight = 18.sp, color = c.body,
+                        )
+                        if (t.handingBack) HandingBack(t.onCloseApp)
+                        AccessLine(t.granted, t.handingBack, t.canHandBack)
+                        LineButton("Text access log", t.onLog, Modifier.fillMaxWidth())
+                    }
+                }
+            }
             Section("What Lineside can do")
             Text(
                 "All optional. Lineside has no internet access, no account and never reads your call log.",
@@ -107,6 +125,11 @@ fun SettingsScreen(
         }
     }
 }
+
+class TextsState(
+    val numbers: Int, val granted: Boolean, val handingBack: Boolean, val canHandBack: Boolean,
+    val onLog: () -> Unit, val onCloseApp: () -> Unit,
+)
 
 @Composable
 private fun Section(text: String) =

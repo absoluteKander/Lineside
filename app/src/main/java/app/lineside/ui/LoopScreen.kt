@@ -104,6 +104,8 @@ fun LoopScreen(
     onClose: () -> Unit,
     onEventClick: (Event) -> Unit,
     onNameNumber: (number: String, name: String) -> Unit,
+    /** null where texts aren't possible (the Play build). */
+    onTexts: (() -> Unit)? = null,
 ) {
     val c = Line.c
     val loop = full.loop
@@ -162,6 +164,7 @@ fun LoopScreen(
                     onCall = { if (full.numbers.size > 1) pickNumber = true else full.numbers.firstOrNull()?.let { onCall(it.number) } },
                     callEnabled = full.numbers.isNotEmpty(), onNote = onNote, onLog = onLog, onClose = onClose,
                 )
+                onTexts?.let { TextsRow(full, lineColor, it) }
             }
             if (days.isEmpty()) item {
                 Text("No waypoints yet. Calls, voicemails, texts and your notes will appear here, newest first.",

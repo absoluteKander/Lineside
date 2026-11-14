@@ -37,8 +37,10 @@ class LoopRepo(private val db: Db, private val contacts: ContactSurface, private
     suspend fun edit(id: Long, name: String, topic: String, numbers: List<NumberInput>) = io {
         val full = dao.get(id) ?: return@io
         dao.update(full.loop.copy(name = name.trim(), topic = topic.trim()))
+        // A number that stays keeps its texts switch; a removed number takes its switch with it.
+        val since = full.numbers.associate { it.key to it.textsSince }
         dao.clearNumbers(id)
-        dao.insertNumbers(clean(id, numbers))
+        dao.insertNumbers(clean(id, numbers).map { it.copy(textsSince = since[it.key]) })
         resync(id)
     }
 
@@ -81,6 +83,35 @@ class LoopRepo(private val db: Db, private val contacts: ContactSurface, private
     }
 
     suspend fun deleteEvent(event: Event) = io { dao.deleteEvent(event); resync(event.loopId) }
+
+    // ---- Texts ----
+
+    /** The loop's switch. Turning it off also turns off every number in it: turning back on means choosing again. */
+    suspend fun setLoopTexts(id: Long, on: Boolean) = io {
+        dao.setTextsOn(id, on)
+        if (!on) dao.clearTexts(id)
+    }
+
+    /** A number's switch: on means "texts from now on", off forgets when it was on. */
+    suspend fun setNumberTexts(loopId: Long, number: String, on: Boolean) = io {
+        dao.setTextsSince(loopId, NumberKey.of(number), if (on) clock() else null)
+    }
+
+    suspend fun smsIds(loopId: Long): Set<Long> = io { dao.smsIds(loopId).toSet() }
+
+    /** Texts found for a loop, all at once: one contact update rather than one per text. */
+    suspend fun addTexts(loopId: Long, texts: List<Event>) = io {
+        if (texts.isEmpty()) return@io
+        dao.insertEvents(texts)
+        dao.touch(loopId, texts.maxOf { it.at })
+        resync(loopId)
+    }
+
+    fun observeLog() = dao.observeLog()
+    suspend fun log(line: TextLog) = io {
+        dao.insertLog(line)
+        dao.pruneLog(clock() - 180L * 24 * 60 * 60_000)
+    }
 
     /** "Keep": the user still cares about a quiet loop; it leaves the quiet list for another three weeks. */
     suspend fun keep(id: Long) = io { dao.setKept(id, clock()) }

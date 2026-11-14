@@ -51,6 +51,17 @@ interface LoopDao {
     @Query("UPDATE Loop SET keptAt = :at WHERE id = :id") suspend fun setKept(id: Long, at: Long)
     @Query("SELECT rawContactId FROM Loop WHERE rawContactId IS NOT NULL") suspend fun rawContactIds(): List<Long>
 
+    // ---- Texts ----
+    @Query("UPDATE Loop SET textsOn = :on WHERE id = :id") suspend fun setTextsOn(id: Long, on: Boolean)
+    @Query("UPDATE LoopNumber SET textsSince = :since WHERE loopId = :loopId AND `key` = :key")
+    suspend fun setTextsSince(loopId: Long, key: String, since: Long?)
+    @Query("UPDATE LoopNumber SET textsSince = NULL WHERE loopId = :loopId") suspend fun clearTexts(loopId: Long)
+    @Query("SELECT smsId FROM Event WHERE loopId = :loopId AND smsId IS NOT NULL") suspend fun smsIds(loopId: Long): List<Long>
+    @Insert suspend fun insertEvents(events: List<Event>)
+    @Insert suspend fun insertLog(line: TextLog)
+    @Query("SELECT * FROM TextLog ORDER BY at DESC, id DESC LIMIT 200") fun observeLog(): Flow<List<TextLog>>
+    @Query("DELETE FROM TextLog WHERE at < :before") suspend fun pruneLog(before: Long)
+
     @Query("UPDATE Loop SET lastActivityAt = MAX(lastActivityAt, :at) WHERE id = :loopId")
     suspend fun touch(loopId: Long, at: Long)
 }
