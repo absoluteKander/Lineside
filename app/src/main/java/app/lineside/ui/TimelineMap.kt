@@ -117,15 +117,19 @@ fun TimelineMap(
                     val l = xOf(here.first().unit) - 16.dp.toPx(); val r = xOf(here.last().unit) + 16.dp.toPx()
                     drawRoundRect(Color.White, Offset(l, y - 17.dp.toPx()), Size(r - l, 34.dp.toPx()), CornerRadius(9.dp.toPx()), style = Stroke(2.dp.toPx()))
                 }
-                // A date over the first dot of each day.
+                // A date over the first dot of each day, kept on screen and never on top of the one before.
                 var lastDay: LocalDate? = null
+                var lastRight = Float.NEGATIVE_INFINITY
                 for (s in visible) {
                     if (s.day != lastDay) {
-                        val label = dayFmt.format(s.day).uppercase()
-                        val bright = s.day == hereDay || s.day == stops.last().day
-                        drawText(measurer, label, Offset(xOf(s.unit) - 8.dp.toPx(), 2.dp.toPx()),
-                            TextStyle(fontFamily = Type.Mono, fontSize = 10.sp, color = if (bright) c.headerInk else c.headerMuted))
                         lastDay = s.day
+                        val bright = s.day == hereDay || s.day == stops.last().day
+                        val laid = measurer.measure(dayFmt.format(s.day).uppercase(),
+                            TextStyle(fontFamily = Type.Mono, fontSize = 10.sp, color = if (bright) c.headerInk else c.headerMuted), softWrap = false, maxLines = 1)
+                        val x = (xOf(s.unit) - 8.dp.toPx()).coerceAtMost(size.width - laid.size.width - 4.dp.toPx())
+                        if (x < lastRight + 6.dp.toPx()) continue
+                        drawText(laid, topLeft = Offset(x, 2.dp.toPx()))
+                        lastRight = x + laid.size.width
                     }
                 }
                 for (s in visible) {

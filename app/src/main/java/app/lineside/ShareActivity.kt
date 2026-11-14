@@ -46,7 +46,7 @@ class ShareActivity : ComponentActivity() {
                         val loopId = save.loopId ?: app.repo.create(save.newName.trim(), "", listOfNotNull(save.number?.let { NumberInput(it) }))
                         if (save.loopId != null && save.addNumber && save.number != null) app.repo.addNumber(loopId, save.number)
                         app.repo.addEvent(
-                            Event(loopId = loopId, kind = save.kind, at = System.currentTimeMillis() - save.agoMs, text = save.text.trim(),
+                            Event(loopId = loopId, kind = save.kind, at = save.at, text = save.text.trim(),
                                 number = save.number, source = EventSource.SHARED),
                         )
                         val name = app.repo.get(loopId)?.loop?.name.orEmpty()

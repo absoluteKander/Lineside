@@ -28,4 +28,19 @@ class SharedTest {
 
     @Test fun numberFromFileName() =
         assertEquals(listOf("+15550142299"), Shared.guess(null, null, "audio/ogg", "Voicemail +15550142299 2026-11-14.ogg").numbers)
+
+    @Test fun dialerFileNameGivesCallerAndTime() {
+        val zone = java.time.ZoneId.of("America/New_York")
+        val (who, at) = Shared.dialerFile("Second Phone_11-11-26_0929PM.amr", zone)!!
+        assertEquals("Second Phone", who)
+        assertEquals(java.time.ZonedDateTime.of(2026, 11, 11, 21, 29, 0, 0, zone).toInstant().toEpochMilli(), at)
+    }
+
+    @Test fun dialerFileNameWithANumber() {
+        val g = Shared.guess(null, null, "audio/amr", "+15550142299_01-02-26_1205AM.amr")
+        assertEquals(listOf("+15550142299"), g.numbers)
+        assertEquals(null, g.name)
+    }
+
+    @Test fun otherFileNamesAreLeftAlone() = assertEquals(null, Shared.dialerFile("recording.mp3"))
 }

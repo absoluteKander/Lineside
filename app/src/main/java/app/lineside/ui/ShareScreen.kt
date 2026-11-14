@@ -58,7 +58,7 @@ data class Arrived(
 data class ShareSave(
     /** null: start a new loop called [newName]. */
     val loopId: Long?, val newName: String,
-    val kind: EventKind, val agoMs: Long, val number: String?, val text: String, val addNumber: Boolean,
+    val kind: EventKind, val at: Long, val number: String?, val text: String, val addNumber: Boolean,
 )
 
 private const val NEW = -1L
@@ -70,6 +70,8 @@ fun ShareScreen(arrived: Arrived, guess: Shared.Guess, loops: List<LoopFull>?, o
     var kind by rememberSaveable { mutableStateOf(guess.kind) }
     var number by rememberSaveable { mutableStateOf(guess.numbers.firstOrNull()) }
     var ago by rememberSaveable { mutableLongStateOf(0L) }
+    // When the share says when it happened (the phone app's voicemail file name does), that's the default.
+    var useSharedTime by rememberSaveable { mutableStateOf(guess.at != null) }
     var text by rememberSaveable { mutableStateOf(guess.text) }
     var loopId by rememberSaveable { mutableStateOf<Long?>(null) }
     var newName by rememberSaveable { mutableStateOf("") }
@@ -80,18 +82,20 @@ fun ShareScreen(arrived: Arrived, guess: Shared.Guess, loops: List<LoopFull>?, o
     fun owns(f: LoopFull, n: String?) = n != null && f.numbers.any { NumberKey.matches(it.number, n) }
     // Pick the loop that owns the shared number, once the loops have loaded.
     LaunchedEffect(loops == null) {
-        if (loops != null && loopId == null) loopId = list.firstOrNull { owns(it, number) }?.loop?.id ?: if (list.isEmpty()) NEW else null
+        if (loops != null && loopId == null) loopId = list.firstOrNull { owns(it, number) }?.loop?.id
+            ?: guess.name?.let { n -> list.firstOrNull { it.loop.name.trim().equals(n, ignoreCase = true) } }?.loop?.id
+            ?: if (list.isEmpty()) NEW else null
     }
     val chosen = list.firstOrNull { it.loop.id == loopId }
     val lineColor = chosen?.let { Brand.loop(it.loop.id, c.dark) } ?: c.ink
     val ready = (chosen != null) || (loopId == NEW && newName.isNotBlank())
 
-    Column(Modifier.fillMaxSize().background(c.ground)) {
+    Column(Modifier.fillMaxSize().background(c.ground).imePadding()) {
         ScreenBand("Shared to Lineside", onCancel, backIsClose = true, title = when (kind) {
             EventKind.VOICEMAIL -> "A voicemail"; EventKind.TEXT -> "A text"; else -> "A note"
         })
         Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).imePadding().padding(16.dp),
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Label("What it is")
@@ -100,14 +104,20 @@ fun ShareScreen(arrived: Arrived, guess: Shared.Guess, loops: List<LoopFull>?, o
             }
 
             Label("From")
-            if (guess.numbers.isEmpty()) Text("No phone number came with it.", fontSize = 14.sp, color = c.muted)
+            if (guess.numbers.isEmpty()) Text(guess.name?.let { "$it (no phone number came with it)" } ?: "No phone number came with it.", fontSize = 14.sp, color = c.muted)
             else FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (n in guess.numbers) Pill(Fmt.phone(n), number == n) { number = n }
                 Pill("Not from these", number == null) { number = null }
             }
 
             Label("When")
-            WhenLine(ago, lineColor) { ago = it }
+            guess.at?.let { at ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Pill(Fmt.dateTime(at), useSharedTime) { useSharedTime = true }
+                    Text("from the voicemail", fontSize = 13.sp, color = c.muted)
+                }
+            }
+            WhenLine(if (useSharedTime) -1L else ago, lineColor) { ago = it; useSharedTime = false }
 
             Label("Which loop")
             Column(Modifier.fillMaxWidth().background(c.surface, RoundedCornerShape(12.dp)).padding(vertical = 4.dp)) {
@@ -133,7 +143,10 @@ fun ShareScreen(arrived: Arrived, guess: Shared.Guess, loops: List<LoopFull>?, o
         Row(Modifier.navigationBarsPadding().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             LineButton("Cancel", onCancel, Modifier.weight(1f), edge = c.muted)
             LineButton("Add to timeline", {
-                onSave(ShareSave(loopId?.takeIf { it != NEW }, newName, kind, ago, number, text, addNumber))
+                onSave(ShareSave(
+                    loopId?.takeIf { it != NEW }, newName, kind,
+                    if (useSharedTime && guess.at != null) guess.at else System.currentTimeMillis() - ago, number, text, addNumber,
+                ))
             }, Modifier.weight(1.4f), enabled = ready)
         }
     }
