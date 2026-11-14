@@ -77,7 +77,7 @@ data class LoopChoice(val id: Long, val name: String, val detail: String)
  * The call pill: a small draggable overlay that expands into a card with context and a one-line jot field.
  * Plain Views on purpose: an overlay window is simpler without Compose's lifecycle plumbing.
  *
- * Rules (from the spike and the user's design decisions):
+ * Rules:
  * - only ever shown while unlocked, for a call still in progress or just ended;
  * - after the call it lives 5 s unless touched; a touched card closes after 1 min idle;
  * - never takes focus or raises the keyboard unless the user taps it.
@@ -89,7 +89,7 @@ data class LoopChoice(val id: Long, val name: String, val detail: String)
  * Collapsed, it's a tiny departure board: the loop's route bullet, its last stops as a mini line (amber = needs
  * you), then the status in signage type. Expanded, it's the loop screen's header in miniature.
  *
- * Rules (from the spike and the user's design decisions):
+ * Rules:
  * - only ever shown while unlocked, for a call still in progress or just ended;
  * - after the call it lives 5 s unless touched; a touched card closes after 1 min idle;
  * - never takes focus or raises the keyboard unless the user taps it;
@@ -321,7 +321,7 @@ object Pill {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = saved?.first ?: (dm.widthPixels * 0.05).toInt()
-            // 27%: the band Google Phone and the GrapheneOS dialer both leave empty on their call screens.
+            // 27%: the band Google Phone and the AOSP dialer both leave empty on their call screens.
             y = saved?.second ?: (dm.heightPixels * 0.27).toInt()
         }
         params = lp

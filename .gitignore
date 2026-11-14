@@ -7,3 +7,16 @@ local.properties
 .idea/
 *.keystore
 *.jks
+
+# Local-only: signing, databases, logs, captures, built packages
+keystore.properties
+*.db
+*.db-wal
+*.db-shm
+*.log
+*.hprof
+*.apk
+*.aab
+captures/
+.cxx/
+.DS_Store
