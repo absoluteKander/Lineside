@@ -347,7 +347,7 @@ private fun Waypoint(item: TimelineItem, parties: Parties, lineColor: Color, nee
                 if (selected) drawCircle(c.amber.copy(alpha = 0.4f), 18.dp.toPx(), m)
                 drawCircle(c.ground, 13.dp.toPx(), m)
                 drawStop(
-                    if (item is TimelineItem.Texts) StopShape.RECORDED else stopShape(main), m,
+                    if (item is TimelineItem.Texts) StopShape.TEXT else stopShape(main), m,
                     (if (needs || selected) 22 else 18).dp.toPx(), lineColor, c.ground, c.amber, needsYou = needs, noteFill = c.ground,
                 )
             }

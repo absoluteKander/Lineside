@@ -145,7 +145,7 @@ private data class Kind(val kind: EventKind, val label: String, val icon: ImageV
 private val kinds = listOf(
     Kind(EventKind.MISSED, "Missed", LineIcons.Missed, StopShape.CALL_THEM),
     Kind(EventKind.VOICEMAIL, "Voicemail", LineIcons.Voicemail, StopShape.RECORDED),
-    Kind(EventKind.TEXT, "Text", LineIcons.Text, StopShape.RECORDED),
+    Kind(EventKind.TEXT, "Text", LineIcons.Text, StopShape.TEXT),
     Kind(EventKind.CALL_IN, "Answered", LineIcons.Incoming, StopShape.CALL_THEM),
     Kind(EventKind.CALL_OUT, "I called", LineIcons.Outgoing, StopShape.CALL_YOU),
 )
@@ -210,6 +210,11 @@ private fun ShapeChoice(k: Kind, chosen: Boolean, lineColor: Color, onClick: () 
                 if (k.shape == StopShape.RECORDED) {
                     drawRoundRect(fill, cornerRadius = CornerRadius(14.dp.toPx()))
                     drawRoundRect(edge, Offset(w / 2, w / 2), Size(size.width - w, size.height - w), CornerRadius(12.dp.toPx()), style = Stroke(w))
+                } else if (k.shape == StopShape.TEXT) {
+                    // Body a little shorter so the tail fits in the same box as its neighbours.
+                    val bubble = bubblePath(w / 2, w / 2, size.width - w, size.height - w)
+                    drawPath(bubble, fill)
+                    drawPath(bubble, edge, style = Stroke(w, join = androidx.compose.ui.graphics.StrokeJoin.Round))
                 } else {
                     drawCircle(fill, size.minDimension / 2)
                     drawCircle(edge, size.minDimension / 2 - w / 2, style = Stroke(w))

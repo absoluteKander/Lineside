@@ -95,13 +95,24 @@ fun Lamp(ball: Ball, onDark: Boolean = false) {
 
 private data class Quad<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
 
-/** The shape language: circle = call, squircle = something recorded, diamond = your note. */
-enum class StopShape { CALL_THEM, CALL_YOU, RECORDED, NOTE }
+/** The shape language: circle = call, squircle = voicemail, squircle with a tail = text, diamond = your note. */
+enum class StopShape { CALL_THEM, CALL_YOU, RECORDED, TEXT, NOTE }
+
+/** A text's stop: the voicemail's squircle with a speech-bubble tail at the bottom left. [w] wide, [h] tall in all. */
+fun bubblePath(l: Float, t: Float, w: Float, h: Float): Path {
+    val bodyH = h * 0.82f
+    val body = Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(l, t, l + w, t + bodyH, CornerRadius(w * 0.3f))) }
+    val tail = Path().apply {
+        moveTo(l + w * 0.16f, t + bodyH - w * 0.2f); lineTo(l + w * 0.52f, t + bodyH - w * 0.02f); lineTo(l + w * 0.1f, t + h); close()
+    }
+    return Path.combine(androidx.compose.ui.graphics.PathOperation.Union, body, tail)
+}
 
 fun stopShape(e: Event) = when (e.kind) {
     EventKind.CALL_IN, EventKind.MISSED -> StopShape.CALL_THEM
     EventKind.CALL_OUT -> StopShape.CALL_YOU
-    EventKind.VOICEMAIL, EventKind.TEXT -> StopShape.RECORDED
+    EventKind.VOICEMAIL -> StopShape.RECORDED
+    EventKind.TEXT -> StopShape.TEXT
     EventKind.NOTE -> StopShape.NOTE
 }
 
@@ -121,6 +132,11 @@ fun DrawScope.drawStop(shape: StopShape, c: Offset, d: Float, line: Color, hole:
         StopShape.RECORDED -> {
             if (needsYou) drawRoundRect(amber.copy(alpha = 0.35f), Offset(c.x - r * 1.6f, c.y - r * 1.6f), Size(r * 3.2f, r * 3.2f), CornerRadius(r * 0.9f))
             drawRoundRect(fill, Offset(c.x - r, c.y - r), Size(d, d), CornerRadius(d * 0.3f))
+        }
+        StopShape.TEXT -> {
+            if (needsYou) drawRoundRect(amber.copy(alpha = 0.35f), Offset(c.x - r * 1.6f, c.y - r * 1.6f), Size(r * 3.2f, r * 3.2f), CornerRadius(r * 0.9f))
+            // Body centred where a voicemail's would be; the tail hangs just below it.
+            drawPath(bubblePath(c.x - r, c.y - r, d, d * 1.2f), fill)
         }
         StopShape.NOTE -> {
             val s = r * 0.85f

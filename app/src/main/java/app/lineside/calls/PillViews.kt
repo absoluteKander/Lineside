@@ -106,7 +106,15 @@ internal object StopPainter {
             }
             EventKind.VOICEMAIL, EventKind.TEXT -> {
                 if (needsYou) { p.color = 0x59FFB547; rect.set(cx - r * 1.6f, cy - r * 1.6f, cx + r * 1.6f, cy + r * 1.6f); cv.drawRoundRect(rect, r * 0.9f, r * 0.9f, p) }
-                p.color = fill; rect.set(cx - r, cy - r, cx + r, cy + r); cv.drawRoundRect(rect, d * 0.3f, d * 0.3f, p)
+                p.color = fill
+                if (kind == EventKind.TEXT) {
+                    // Same bubble as the app's: squircle body, tail at the bottom left (ui/LineParts.bubblePath).
+                    val bodyB = cy - r + d * 1.2f * 0.82f
+                    rect.set(cx - r, cy - r, cx + r, bodyB); cv.drawRoundRect(rect, d * 0.3f, d * 0.3f, p)
+                    cv.drawPath(android.graphics.Path().apply {
+                        moveTo(cx - r + d * 0.16f, bodyB - d * 0.2f); lineTo(cx - r + d * 0.52f, bodyB - d * 0.02f); lineTo(cx - r + d * 0.1f, cy - r + d * 1.2f); close()
+                    }, p)
+                } else { rect.set(cx - r, cy - r, cx + r, cy + r); cv.drawRoundRect(rect, d * 0.3f, d * 0.3f, p) }
             }
             EventKind.NOTE -> diamond(cv, cx, cy, r * 0.85f, PillStyle.INK, line, d * 0.16f)
         }
