@@ -77,8 +77,12 @@ dependencies {
     implementation("androidx.room:room-ktx:2.7.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
+    // The encrypted export: a standard AES-256 ZIP that 7-Zip, Keka and PeaZip can open. Pure Java, no network.
+    implementation("net.lingala.zip4j:zip4j:2.11.5")
     ksp("androidx.room:room-compiler:2.7.2")
     testImplementation("junit:junit:4.13.2")
+    // Android's org.json is a stub in unit tests; the real one lets the export's JSON be tested on the JVM.
+    testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.room:room-testing:2.7.2")

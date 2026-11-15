@@ -21,7 +21,15 @@ that the most important claims are enforced by something other than prose.
   inspected with `aapt dump permissions` after a build.
 - **No call log.** No `READ_CALL_LOG` anywhere. Calls are seen through `CallScreeningService`,
   which receives each call's number as it starts and nothing historical.
-- **Backup off.** `android:allowBackup="false"` in the manifest.
+- **Backup only by choice, only encrypted.** `Backup.kt` (the backup agent) hands Android nothing
+  unless the user's switch is on and the transport reports client-side encryption or a
+  device-to-device transfer; `Backup.allowed` is unit-tested. `data_extraction_rules.xml` lists the
+  only files that may go (the database and `settings.xml`) and sets
+  `disableIfNoEncryptionCapabilities`. On the emulator, Android still called the agent for an
+  unencrypted transport, so the agent's own check is the one to keep.
+- **The export is encrypted and complete.** `Export.kt` writes AES-256 entries only, and import
+  refuses unencrypted entries; `ExportTest` checks that contact ids, message ids and texts switches
+  are never written out.
 
 ## What is narrowed by code, and must stay narrowed
 
@@ -35,6 +43,10 @@ narrowing lives in `app/src/main/java/app/lineside/Texts.kt`:
 
 Any change to that file should keep all three, and the access log should keep describing what the
 code actually does.
+
+Contact writes are confined to Lineside's own account: `ContactSurface` checks the account type before
+updating or deleting a raw contact, so an id restored from another phone can never touch one of the
+user's own contacts.
 
 ## What is deliberately not done
 

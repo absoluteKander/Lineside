@@ -1,0 +1,8 @@
+app/src/main/assets/eff_large_wordlist.txt
+
+The EFF Large Wordlist for Passphrases, by the Electronic Frontier Foundation (2016),
+https://www.eff.org/dice. Lineside uses it to suggest passphrases for the encrypted export.
+The dice numbers were removed; the words are unchanged.
+
+Licensed under the Creative Commons Attribution 3.0 United States License,
+https://creativecommons.org/licenses/by/3.0/us/

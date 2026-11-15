@@ -22,6 +22,25 @@ class Settings(ctx: Context) {
         get() = p.getLong("lockedAwayAt", 0L)
         set(v) = p.edit().putLong("lockedAwayAt", v).apply()
 
+    /**
+     * Android backup (Google's, or Seedvault): off unless the user turns it on, and even then only into a backup
+     * that's end-to-end encrypted, or a phone-to-phone transfer. See [Backup].
+     */
+    var backupOn: Boolean
+        get() = p.getBoolean("backupOn", false)
+        set(v) = p.edit().putBoolean("backupOn", v).apply()
+    /** Set when Android restores Lineside onto a phone; the next start tidies up what belonged to the old phone. */
+    var restoredPending: Boolean
+        get() = p.getBoolean("restoredPending", false)
+        set(v) { p.edit().putBoolean("restoredPending", v).commit() }
+    /** When Android last asked to back up and Lineside said no because the backup wasn't end-to-end encrypted. */
+    var backupRefusedAt: Long
+        get() = p.getLong("backupRefusedAt", 0L)
+        set(v) { p.edit().putLong("backupRefusedAt", v).commit() }
+    var lastExportAt: Long
+        get() = p.getLong("lastExportAt", 0L)
+        set(v) = p.edit().putLong("lastExportAt", v).apply()
+
     /** The pill during calls. Off: Lineside still updates the call screen and logs calls to loops. */
     var pillEnabled: Boolean
         get() = p.getBoolean("pillEnabled", true)

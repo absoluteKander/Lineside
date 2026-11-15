@@ -130,7 +130,8 @@ class ContactSurface(private val ctx: Context, private val discreet: () -> Boole
 
     fun delete(rawId: Long?) {
         if (rawId == null || !canWrite()) return
-        runCatching { cr.delete(asSyncAdapter(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawId)), null, null) }
+        // Only ever one of Lineside's own: never a contact of the user's, whatever id comes in.
+        runCatching { cr.delete(asSyncAdapter(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawId)), "${RawContacts.ACCOUNT_TYPE}=?", arrayOf(accountType)) }
             .onFailure { Log.w(TAG, "delete failed", it) }
     }
 
@@ -144,9 +145,10 @@ class ContactSurface(private val ctx: Context, private val discreet: () -> Boole
         return ids
     }
 
+    /** Ours and not deleted. The account check matters: an id from another phone (a restore) may be someone else's here. */
     private fun exists(rawId: Long): Boolean =
-        cr.query(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawId), arrayOf(RawContacts.DELETED), null, null, null)
-            ?.use { it.moveToFirst() && it.getInt(0) == 0 } ?: false
+        cr.query(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawId), arrayOf(RawContacts.DELETED, RawContacts.ACCOUNT_TYPE), null, null, null)
+            ?.use { it.moveToFirst() && it.getInt(0) == 0 && it.getString(1) == accountType } ?: false
 
     /**
      * True if this number belongs to one of the user's regular (permanent) contacts, i.e. any contact

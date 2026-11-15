@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -86,6 +87,8 @@ internal fun LineSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
     val c = Line.c
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        // A tall sheet (or one pushed up by the keyboard) stops below the status bar instead of under it.
+        modifier = Modifier.statusBarsPadding(),
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = c.ground,
         dragHandle = null,

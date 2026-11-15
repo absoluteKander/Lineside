@@ -48,8 +48,16 @@ object AppLock {
     /** On by default where a screen lock exists; turning it off is a choice the user makes (in onboarding, later). */
     fun enabled(ctx: android.content.Context) = App.of(ctx).settings.appLock && available(ctx)
 
+    /**
+     * Set just before Lineside itself opens one of Android's screens (the "save to" or "open" picker), so coming back
+     * from it doesn't count as having been away. Memory only; used once, and only for a couple of minutes.
+     */
+    private var holdUntil = 0L
+    fun holdForOwnScreen() { holdUntil = System.currentTimeMillis() + 2 * 60_000L }
+
     fun shouldLock(ctx: android.content.Context): Boolean {
         if (!enabled(ctx)) return false
+        if (System.currentTimeMillis() < holdUntil) { holdUntil = 0L; return false }
         val s = App.of(ctx).settings
         val away = s.lockedAwayAt
         return away == 0L || System.currentTimeMillis() - away > s.lockAfterMs

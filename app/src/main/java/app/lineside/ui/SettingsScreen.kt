@@ -53,6 +53,7 @@ fun SettingsScreen(
     /** Texts (foss only): null hides the section. */
     texts: TextsState? = null,
     lock: LockState? = null,
+    backup: BackupState? = null,
 ) {
     val c = Line.c
     Column(Modifier.fillMaxSize().background(c.ground)) {
@@ -95,6 +96,38 @@ fun SettingsScreen(
                                 for ((ms, label) in listOf(0L to "Right away", 60_000L to "1 minute", 5 * 60_000L to "5 minutes"))
                                     Pill(label, l.afterMs == ms) { l.onAfter(ms) }
                             }
+                        }
+                    }
+                }
+            }
+            backup?.let { b ->
+                Section("Backup and export")
+                Group {
+                    Toggle(
+                        "Include in Android backup",
+                        if (b.on) "Android can back up Lineside (Google's backup, or Seedvault on GrapheneOS) only when that backup is encrypted " +
+                            "with your screen lock, so the backup service can't read it. Moving to a new phone with Android's transfer works too. " +
+                            "Your phone's own backup has to be switched on as well."
+                        else "Off: Android's backup gets nothing from Lineside. Switch on to allow it, but only into a backup encrypted with your " +
+                            "screen lock, or a transfer to your new phone.",
+                        b.on, b.onBackup,
+                    )
+                    if (b.on && b.refusedAt > 0) Text(
+                        "The last time Android asked (${Fmt.dateTime(b.refusedAt)}), its backup wasn't encrypted with your screen lock, so Lineside sent nothing.",
+                        Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp), fontSize = 13.sp, lineHeight = 18.sp, color = c.amberInk,
+                    )
+                    Divider()
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Encrypted export", fontFamily = Type.Signage, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = c.ink)
+                        Text(
+                            "A file of everything, archived loops and the text access log too, locked with a passphrase. " +
+                                "Read it on a computer, keep it as your own backup, or import it on another phone.",
+                            fontSize = 13.sp, lineHeight = 18.sp, color = c.muted,
+                        )
+                        if (b.lastExportAt > 0) Text("Last export: ${Fmt.dateTime(b.lastExportAt)}", fontSize = 13.sp, color = c.body)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            LineButton("Export…", b.onExport, Modifier.weight(1f))
+                            LineButton("Import…", b.onImport, Modifier.weight(1f))
                         }
                     }
                 }

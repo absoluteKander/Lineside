@@ -1,18 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Nothing goes to cloud backup or device-to-device transfer unless the user opts in (handled in code later). -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later. Copyright (C) 2026 Absolute Candor. -->
+<!-- What Android may copy, if the user has switched backup on (the Backup agent checks that, and encryption).
+     Cloud backup only when Android can encrypt it end to end with the screen lock. Never the call-in-progress
+     state or the call-screen photo cache, which belong to this phone. -->
 <data-extraction-rules>
-    <cloud-backup>
-        <exclude domain="root" path="." />
-        <exclude domain="file" path="." />
-        <exclude domain="database" path="." />
-        <exclude domain="sharedpref" path="." />
-        <exclude domain="external" path="." />
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
+        <include domain="database" path="lineside.db" />
+        <include domain="database" path="lineside.db-wal" />
+        <include domain="sharedpref" path="settings.xml" />
     </cloud-backup>
     <device-transfer>
-        <exclude domain="root" path="." />
-        <exclude domain="file" path="." />
-        <exclude domain="database" path="." />
-        <exclude domain="sharedpref" path="." />
-        <exclude domain="external" path="." />
+        <include domain="database" path="lineside.db" />
+        <include domain="database" path="lineside.db-wal" />
+        <include domain="sharedpref" path="settings.xml" />
     </device-transfer>
 </data-extraction-rules>

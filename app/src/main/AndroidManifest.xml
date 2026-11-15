@@ -27,13 +27,16 @@
     <!-- Optional. The pill during and just after calls. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
-    <!-- Backup stays off until the user chooses it during onboarding (custom BackupAgent, later). -->
+    <!-- Backup: Android may ask, but the Backup agent hands over nothing unless the user switched it on,
+         and then only into an end-to-end encrypted backup or a phone-to-phone transfer. -->
     <application
         android:name=".App"
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:allowBackup="false"
+        android:allowBackup="true"
+        android:backupAgent=".Backup"
+        android:fullBackupOnly="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="true"
         android:theme="@style/Theme.Lineside">

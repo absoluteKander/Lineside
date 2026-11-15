@@ -4,6 +4,7 @@
 package app.lineside.data
 
 import app.lineside.contacts.ContactSurface
+import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
@@ -181,6 +182,49 @@ class LoopRepo(private val db: Db, private val contacts: ContactSurface, private
             val owned = dao.rawContactIds().toSet()
             contacts.ourRawContactIds().filter { it !in owned }.forEach { contacts.delete(it) }
         }
+    }
+
+    /** Everything, for the export. */
+    suspend fun exportContents(): Export.Contents = io { Export.Contents(dao.everything(), dao.wholeLog(), clock()) }
+
+    data class Imported(val added: Int, val archived: Int, val alreadyHere: Int)
+
+    /**
+     * Adds an export's loops as new loops. One that's already here (same name, started at the same moment) is
+     * left alone. Texts switches come in off, since consent to read messages was given on the phone that made the
+     * export; message ids from that phone are dropped for the same reason.
+     */
+    suspend fun import(c: Export.Contents): Imported = io {
+        var added = 0; var archived = 0; var same = 0
+        val newIds = mutableMapOf<Long, Long>()
+        db.withTransaction {
+            for (f in c.loops) {
+                if (dao.countSame(f.loop.createdAt, f.loop.name) > 0) { same++; continue }
+                val id = dao.insert(f.loop.copy(id = 0, rawContactId = null, textsOn = false))
+                newIds[f.loop.id] = id
+                dao.insertNumbers(f.numbers.distinctBy { it.key }.filter { it.key.isNotEmpty() }
+                    .map { it.copy(id = 0, loopId = id, textsSince = null) })
+                dao.insertEvents(f.events.map { it.copy(id = 0, loopId = id, smsId = null) })
+                added++
+                if (f.loop.archivedAt != null) archived++
+            }
+            // A loop's log lines come with it; lines about the permission itself come once.
+            dao.insertLogs(c.log.mapNotNull { t ->
+                when {
+                    t.loopId != null -> newIds[t.loopId]?.let { t.copy(id = 0, loopId = it) }
+                    dao.countSameLog(t.at, t.what) == 0 -> t.copy(id = 0)
+                    else -> null
+                }
+            })
+        }
+        newIds.values.forEach { resync(it) }
+        Imported(added, archived, same)
+    }
+
+    /** See [LoopDao.forgetPhoneLoops]. */
+    suspend fun forgetOldPhone() = io {
+        db.withTransaction { dao.forgetPhoneLoops(); dao.forgetPhoneNumbers(); dao.forgetPhoneEvents() }
+        resyncAll()
     }
 
     private fun clean(loopId: Long, numbers: List<NumberInput>) = numbers

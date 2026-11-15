@@ -75,4 +75,21 @@ interface LoopDao {
 
     @Query("UPDATE Loop SET lastActivityAt = MAX(lastActivityAt, :at) WHERE id = :loopId")
     suspend fun touch(loopId: Long, at: Long)
+
+    // ---- Export, import, and moving to another phone ----
+    /** Every loop, archived ones too: the export leaves nothing out. */
+    @Transaction @Query("SELECT * FROM Loop ORDER BY createdAt, id") suspend fun everything(): List<LoopFull>
+    @Query("SELECT * FROM TextLog ORDER BY at, id") suspend fun wholeLog(): List<TextLog>
+    /** The same loop, already here: an import of an export made on this phone, or imported twice. */
+    @Query("SELECT COUNT(*) FROM Loop WHERE createdAt = :createdAt AND name = :name") suspend fun countSame(createdAt: Long, name: String): Int
+    @Query("SELECT COUNT(*) FROM TextLog WHERE loopId IS NULL AND at = :at AND what = :what") suspend fun countSameLog(at: Long, what: String): Int
+    @Insert suspend fun insertLogs(lines: List<TextLog>)
+
+    /**
+     * After a restore onto a phone: contact ids and message ids belong to the old phone, and texts switches are
+     * consent given there, for that phone's messages. All of it starts over here.
+     */
+    @Query("UPDATE Loop SET rawContactId = NULL, textsOn = 0") suspend fun forgetPhoneLoops()
+    @Query("UPDATE LoopNumber SET textsSince = NULL") suspend fun forgetPhoneNumbers()
+    @Query("UPDATE Event SET smsId = NULL") suspend fun forgetPhoneEvents()
 }

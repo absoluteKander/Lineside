@@ -29,7 +29,12 @@ import app.lineside.calls.Pill
 import app.lineside.data.Event
 import app.lineside.data.EventKind
 import app.lineside.data.LoopFull
+import app.lineside.data.Export
 import app.lineside.ui.ArchiveScreen
+import app.lineside.ui.BackupState
+import app.lineside.ui.ExportSheet
+import app.lineside.ui.ImportSheet
+import app.lineside.ui.ImportUi
 import app.lineside.ui.ArchivedSheet
 import app.lineside.ui.CloseLoopDialog
 import app.lineside.ui.EventSheet
@@ -45,7 +50,9 @@ import app.lineside.ui.PickTextsSheet
 import app.lineside.ui.TextLogSheet
 import app.lineside.ui.TextsSheet
 import app.lineside.ui.TextsState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -178,8 +185,56 @@ class MainActivity : ComponentActivity() {
 
         var sheet by remember { mutableStateOf<String?>(null) } // "note", "log", "close", "texts"
 
-        // ---- Texts (foss): two switches, Android's permission only at the first number, handed back when unused. ----
         val ctx = this@MainActivity
+
+        // ---- Backup and export ----
+        var backupOn by remember { mutableStateOf(settings.backupOn) }
+        var lastExport by remember { mutableLongStateOf(settings.lastExportAt) }
+        var exporting by remember { mutableStateOf(false) }
+        val saveExport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+            val pass = app.pendingExport
+            app.pendingExport = null
+            if (uri == null) return@rememberLauncherForActivityResult
+            if (pass == null) {
+                // Lineside was closed while the save screen was open: don't leave an empty file behind.
+                runCatching { android.provider.DocumentsContract.deleteDocument(contentResolver, uri) }
+                android.widget.Toast.makeText(ctx, "The export was interrupted. Please try again.", android.widget.Toast.LENGTH_LONG).show()
+                return@rememberLauncherForActivityResult
+            }
+            scope.launch {
+                val ok = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val contents = repo.exportContents()
+                        contentResolver.openOutputStream(uri, "wt")!!.use { Export.write(it, pass.toCharArray(), contents) }
+                    }.onFailure { e ->
+                        android.util.Log.w("Lineside", "export failed", e)
+                        runCatching { android.provider.DocumentsContract.deleteDocument(contentResolver, uri) }
+                    }.isSuccess
+                }
+                if (ok) { settings.lastExportAt = System.currentTimeMillis(); lastExport = settings.lastExportAt }
+                android.widget.Toast.makeText(
+                    ctx, if (ok) "Export saved. Keep the passphrase somewhere safe." else "Couldn't save the export. Nothing was written.",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+        var importUri by rememberSaveable { mutableStateOf<String?>(null) }
+        var importUi by remember { mutableStateOf<ImportUi>(ImportUi.Ready) }
+        val pickImport = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) { importUi = ImportUi.Ready; importUri = uri.toString() }
+        }
+        val restored by app.restoredNotice
+        LaunchedEffect(restored) {
+            if (restored) {
+                app.restoredNotice.value = false
+                android.widget.Toast.makeText(
+                    ctx, "Lineside was restored from a backup." + if (Texts.available) " Texts switches are off on this phone until you turn them on." else "",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+
+        // ---- Texts (foss): two switches, Android's permission only at the first number, handed back when unused. ----
         var handing by remember { mutableStateOf(Texts.handingBack) }
         LaunchedEffect(loaded) { loaded?.let { Texts.reconcile(ctx, it); handing = Texts.handingBack } }
         val textsGranted = remember(tick, permTick, loaded, handing) { Texts.granted(ctx) }
@@ -266,6 +321,16 @@ class MainActivity : ComponentActivity() {
                     },
                     onAfter = { lockAfter = it; settings.lockAfterMs = it },
                 ),
+                backup = BackupState(
+                    on = backupOn, refusedAt = settings.backupRefusedAt, lastExportAt = lastExport,
+                    onBackup = { backupOn = it; settings.backupOn = it; if (!it) settings.backupRefusedAt = 0L },
+                    // Everything in one file: ask for the screen lock again first, even if Lineside is already open.
+                    onExport = {
+                        if (AppLock.enabled(ctx)) AppLock.authenticate(this@MainActivity, "Export your loops") { ok -> if (ok) exporting = true }
+                        else exporting = true
+                    },
+                    onImport = { AppLock.holdForOwnScreen(); pickImport.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) },
+                ),
                 texts = if (!Texts.available) null else TextsState(
                     numbers = Texts.active(loops).size, granted = textsGranted, handingBack = handing,
                     canHandBack = android.os.Build.VERSION.SDK_INT >= 33, onLog = { showTextLog = true }, onCloseApp = closeApp,
@@ -339,6 +404,31 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                 )
+            }
+        }
+        if (exporting) ExportSheet({ app.passphrase() }, onDismiss = { exporting = false }) { pass ->
+            exporting = false
+            app.pendingExport = pass
+            AppLock.holdForOwnScreen()
+            saveExport.launch("Lineside export ${java.time.LocalDate.now()}.zip")
+        }
+        importUri?.let { u ->
+            val uri = Uri.parse(u)
+            val name = remember(u) { runCatching { contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null } }.getOrNull() }
+            ImportSheet(name, importUi, onDismiss = { importUri = null; importUi = ImportUi.Ready }) { pass ->
+                importUi = ImportUi.Working
+                scope.launch {
+                    importUi = withContext(Dispatchers.IO) {
+                        runCatching {
+                            // Lineside's own passphrases never start or end with a space, so a pasted newline is dropped.
+                            val contents = contentResolver.openInputStream(uri)!!.use { Export.read(it, pass.trim().toCharArray()) }
+                            repo.import(contents)
+                        }.fold(
+                            { ImportUi.Done(it.added, it.archived, it.alreadyHere) },
+                            { e -> ImportUi.Failed((e as? Export.Problem)?.message ?: "Couldn't read that file.") },
+                        )
+                    }
+                }
             }
         }
         if (showTextLog) TextLogSheet(textLog, loops.associate { it.loop.id to it.loop.name }) { showTextLog = false }

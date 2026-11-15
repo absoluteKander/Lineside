@@ -16,8 +16,8 @@ privacy decision described below. Where this document says "the app does X," tha
 checked against the source, not assumed from a comment. What has and hasn't been verified is set
 out honestly in [Testing and verification](#testing-and-verification).
 
-**Status: pre-release.** Not yet on Google Play. Onboarding, backup and export are not
-built yet; see [What's not done](#whats-not-done).
+**Status: pre-release.** Not yet on Google Play. Onboarding is not built yet; see
+[What's not done](#whats-not-done).
 
 ## What it will never do
 
@@ -61,8 +61,16 @@ permission granted months ago is never taken as consent for content captured lat
   stored by Lineside. Turning it off is a deliberate choice in Settings.
 - **Discreet call screen** (optional): the call screen shows only "Call back" or "Waiting", never a
   loop's topic or who within it is calling.
-- **Backup is off** (`allowBackup="false"`). A user-chosen, explained backup is planned, never a
-  silent one.
+- **Android backup is off unless you switch it on**, and even then Lineside hands its data only to a
+  backup that is end-to-end encrypted with your screen lock (Google's backup reports this; so can
+  Seedvault), or to a direct phone-to-phone transfer. Otherwise Android's backup gets nothing. On a
+  restored phone, Lineside drops what belonged to the old one: contact ids, message ids, and the
+  texts switches, which are consent given there.
+- **Encrypted export**: one AES-256 ZIP file with every loop, archived ones too, and the text access
+  log, as a page you can read in a browser and as JSON that Lineside can import again. You choose
+  where it goes; Lineside suggests a five-word passphrase (EFF wordlist) or takes one of your own,
+  and never keeps it. Opens with 7-Zip, PeaZip or Keka; the unzip built into Windows and macOS can't
+  open AES ZIPs. Importing adds loops and leaves alone any that are already there.
 - **Closing a loop deletes it**: its calls, notes, texts, numbers and its entry in your contacts.
   Archiving keeps it out of the way instead, and Lineside stops recognising its numbers until you
   restore it.
@@ -97,14 +105,17 @@ mise exec -- ./gradlew assembleFossDebug assemblePlayDebug testFossDebugUnitTest
 ```
 
 Toolchain: AGP 8.11, Gradle 8.13, Kotlin 2.2, Room 2.7, compile/target SDK 36, min SDK 31
-(Android 12). Fonts: Barlow Condensed and JetBrains Mono, both under the SIL Open Font License
-(see `licenses/`).
+(Android 12). The export uses zip4j (Apache-2.0). Fonts: Barlow Condensed and JetBrains Mono, both
+under the SIL Open Font License; passphrase words from the EFF large wordlist, CC BY 3.0 US (see
+`licenses/`).
 
 ## Testing and verification
 
 - **Unit tests** cover the parts that decide things: number matching, loop status, timeline
   grouping (threads, attached notes, folded calls), what a shared voicemail or text turns into,
-  the date parser behind "Add to calendar", archive search, and the flavor split. They run in CI on
+  the date parser behind "Add to calendar", archive search, the flavor split, and the export: its
+  JSON round trip, that phone-bound ids and texts switches never leave, the page escaping what was
+  typed, a wrong passphrase, and files Lineside didn't make. They run in CI on
   every push.
 - **The no-internet guard** is a build task, not a test: it reads each variant's merged manifest and
   fails the build on a network permission.
@@ -112,9 +123,13 @@ Toolchain: AGP 8.11, Gradle 8.13, Kotlin 2.2, Room 2.7, compile/target SDK 36, m
   automated UI tests: the pill during incoming and outgoing calls, the lock-screen notification,
   post-call logging, the share sheet with a real voicemail from the phone app, the texts switches,
   the permission hand-back (confirmed by Android's prompt reappearing and by `dumpsys package`),
-  archiving and restoring, restore-on-call, and the app lock.
+  archiving and restoring, restore-on-call, the app lock, and export and import (the exported file
+  was also opened with libarchive, a separate AES-ZIP implementation). Android backup was checked
+  with the emulator's local transport: refused while switched off, refused while switched on but
+  unencrypted, accepted when the transport reports end-to-end encryption, and a restore cleared the
+  old phone's ids and texts switches.
 - **Not yet verified:** stock Android 16 (a Pixel on stock Android is next); the `play` flavor on a
-  real device; Google Voice's share format; behaviour on Android 12, where the permission cannot be
+  real device; backup through Google's and Seedvault's real transports; Google Voice's share format; behaviour on Android 12, where the permission cannot be
   handed back automatically (Settings explains how to remove it by hand).
 - **Known limits:** while SMS access is held, nothing in Android stops the app from reading other
   messages; the narrowing is Lineside's own code, the access log, and this source. Android's
@@ -123,7 +138,7 @@ Toolchain: AGP 8.11, Gradle 8.13, Kotlin 2.2, Room 2.7, compile/target SDK 36, m
 ## What's not done
 
 Onboarding (which will explain everything above, in the app, before any permission is asked for),
-a user-chosen backup, an encrypted export you can open on a computer, and the store listings.
+and the store listings.
 
 ## License
 
