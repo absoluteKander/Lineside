@@ -16,7 +16,7 @@ privacy decision described below. Where this document says "the app does X," tha
 checked against the source, not assumed from a comment. What has and hasn't been verified is set
 out honestly in [Testing and verification](#testing-and-verification).
 
-**Status: pre-release.** Not yet on Google Play or F-Droid. Onboarding, backup and export are not
+**Status: pre-release.** Not yet on Google Play. Onboarding, backup and export are not
 built yet; see [What's not done](#whats-not-done).
 
 ## What it will never do
@@ -86,11 +86,11 @@ permission granted months ago is never taken as consent for content captured lat
 
 | Build | Where | Difference |
 |---|---|---|
-| `foss` | GitHub releases, F-Droid (planned) | Can add texts from a loop's numbers, as described above |
+| `foss` | Build it yourself from this source | Can add texts from a loop's numbers, as described above |
 | `play` | Google Play (planned), for a small price | No SMS permission at all; texts come in through the share sheet |
 
-The two builds are otherwise the same code. The Play price pays for the work and the convenience
-of store updates; nothing is held back from the free build.
+The two builds are otherwise the same code. No APKs are published on GitHub; the Play price pays
+for the work and the convenience of store updates. Nothing is held back from the source.
 
 ```sh
 mise exec -- ./gradlew assembleFossDebug assemblePlayDebug testFossDebugUnitTest testPlayDebugUnitTest

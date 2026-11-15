@@ -16,8 +16,5 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       # Builds both versions, runs the unit tests, and fails if a network permission ever
       # appears in either app's manifest.
+      # Nothing is uploaded: no APKs are published here. Builds ship through Google Play.
       - run: ./gradlew assembleFossDebug assemblePlayDebug testFossDebugUnitTest testPlayDebugUnitTest
-      - uses: actions/upload-artifact@v4
-        with:
-          name: lineside-debug-apks
-          path: app/build/outputs/apk/*/debug/*.apk
