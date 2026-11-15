@@ -41,6 +41,20 @@ class Settings(ctx: Context) {
         get() = p.getLong("lastExportAt", 0L)
         set(v) = p.edit().putLong("lastExportAt", v).apply()
 
+    /** The introduction has been seen through to the end. */
+    var onboarded: Boolean
+        get() = p.getBoolean("onboarded", false)
+        set(v) = p.edit().putBoolean("onboarded", v).apply()
+
+    /**
+     * Decided once, on Lineside's very first start: nothing here yet (no database), so the introduction runs
+     * without the app lock in front of it. False for anyone who had Lineside before, or restored it.
+     */
+    val freshStart: Boolean get() = p.getBoolean("freshStart", false)
+    fun decideFreshStart(noDatabase: Boolean) {
+        if (!p.contains("freshStart")) p.edit().putBoolean("freshStart", noDatabase && !onboarded).apply()
+    }
+
     /** The pill during calls. Off: Lineside still updates the call screen and logs calls to loops. */
     var pillEnabled: Boolean
         get() = p.getBoolean("pillEnabled", true)

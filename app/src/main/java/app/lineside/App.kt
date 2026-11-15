@@ -24,6 +24,7 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        settings.decideFreshStart(noDatabase = !getDatabasePath("lineside.db").exists())
         DailyWorker.schedule(this)
         // Just restored from a backup or moved from another phone: let go of what belonged to that phone.
         if (settings.restoredPending) scope.launch {

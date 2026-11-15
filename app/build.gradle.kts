@@ -1,6 +1,8 @@
 // Lineside: keeps track of the calls you're waiting on.
 // Copyright (C) 2026 Absolute Candor. Licensed under the GNU GPL v3 or later; see LICENSE.
 
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -23,7 +25,7 @@ android {
         minSdk = 31
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -41,6 +43,17 @@ android {
         }
     }
 
+    // Release signing: read from keystore.properties next to this project's root, which is never committed
+    // (see .gitignore). Without it, release builds come out unsigned.
+    val keystoreFile = rootProject.file("keystore.properties")
+    val signing = if (keystoreFile.exists()) Properties().apply { keystoreFile.inputStream().use { load(it) } } else null
+    if (signing != null) signingConfigs.create("release") {
+        storeFile = rootProject.file(signing.getProperty("storeFile"))
+        storePassword = signing.getProperty("storePassword")
+        keyAlias = signing.getProperty("keyAlias")
+        keyPassword = signing.getProperty("keyPassword")
+    }
+
     buildTypes {
         // Each installed copy needs its own account type, or debug and release builds would fight over it.
         debug {
@@ -49,6 +62,7 @@ android {
         }
         release {
             isMinifyEnabled = false
+            if (signing != null) signingConfig = signingConfigs.getByName("release")
             resValue("string", "account_type", "app.lineside.loops")
         }
     }
@@ -103,6 +117,7 @@ androidComponents {
                 check(hits.isEmpty()) { "Network permission found in ${variant.name} manifest: $hits" }
             }
         }
-        tasks.matching { it.name == "assemble$name" }.configureEach { dependsOn(check) }
+        // Both ways of packaging a build: APKs, and the App Bundle that goes to Google Play.
+        tasks.matching { it.name == "assemble$name" || it.name == "bundle$name" }.configureEach { dependsOn(check) }
     }
 }

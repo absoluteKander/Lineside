@@ -16,8 +16,7 @@ privacy decision described below. Where this document says "the app does X," tha
 checked against the source, not assumed from a comment. What has and hasn't been verified is set
 out honestly in [Testing and verification](#testing-and-verification).
 
-**Status: pre-release.** Not yet on Google Play. Onboarding is not built yet; see
-[What's not done](#whats-not-done).
+**Status: 1.0.0, on its way to Google Play.** Privacy policy: [PRIVACY.md](PRIVACY.md).
 
 ## What it will never do
 
@@ -90,6 +89,16 @@ permission granted months ago is never taken as consent for content captured lat
 | `USE_BIOMETRIC` | Granted at install, no prompt | The app lock's use of your phone's screen lock. |
 | `READ_SYNC_SETTINGS`, `WRITE_SYNC_SETTINGS` | Granted at install, no prompt | Marking Lineside's local contacts account as never syncing. |
 
+## The first run
+
+Before anything else, Lineside walks through what it does and doesn't do: no internet, no account,
+no call log, no recording; a practice loop on the real loop card (held in memory, never saved); what
+gets in and how, including what Android's own permission prompts will say; each permission with
+its reason; the app lock, presented on, with turning it off asking a second time; the backup choice
+and the export; the quiet-loop reminder, off unless chosen; and the maker's other app, with no
+store link and nothing that leaves Lineside. It can be replayed from Settings. On a fresh install
+the app lock waits until the introduction is done; there is nothing to protect before then.
+
 ## Builds
 
 | Build | Where | Difference |
@@ -103,6 +112,22 @@ for the work and the convenience of store updates. Nothing is held back from the
 ```sh
 mise exec -- ./gradlew assembleFossDebug assemblePlayDebug testFossDebugUnitTest testPlayDebugUnitTest
 ```
+
+### Signing a release
+
+Release builds are signed only if a `keystore.properties` file exists at the project root. It is
+listed in `.gitignore` and must never be committed:
+
+```properties
+storeFile=/absolute/path/to/upload-key.jks
+storePassword=...
+keyAlias=upload
+keyPassword=...
+```
+
+Then `./gradlew bundlePlayRelease` writes `app/build/outputs/bundle/playRelease/app-play-release.aab`.
+The no-internet check runs for bundles as well as APKs. Store listing text and Data safety answers
+are in [store/LISTING.md](store/LISTING.md).
 
 Toolchain: AGP 8.11, Gradle 8.13, Kotlin 2.2, Room 2.7, compile/target SDK 36, min SDK 31
 (Android 12). The export uses zip4j (Apache-2.0). Fonts: Barlow Condensed and JetBrains Mono, both
@@ -123,7 +148,7 @@ under the SIL Open Font License; passphrase words from the EFF large wordlist, C
   automated UI tests: the pill during incoming and outgoing calls, the lock-screen notification,
   post-call logging, the share sheet with a real voicemail from the phone app, the texts switches,
   the permission hand-back (confirmed by Android's prompt reappearing and by `dumpsys package`),
-  archiving and restoring, restore-on-call, the app lock, and export and import (the exported file
+  archiving and restoring, restore-on-call, the app lock, the first-run introduction, and export and import (the exported file
   was also opened with libarchive, a separate AES-ZIP implementation). Android backup was checked
   with the emulator's local transport: refused while switched off, refused while switched on but
   unencrypted, accepted when the transport reports end-to-end encryption, and a restore cleared the
@@ -137,8 +162,8 @@ under the SIL Open Font License; passphrase words from the EFF large wordlist, C
 
 ## What's not done
 
-Onboarding (which will explain everything above, in the app, before any permission is asked for),
-and the store listings.
+Automatic expiry of archived loops, and automated UI tests (everything on screen is checked by hand,
+as above).
 
 ## License
 

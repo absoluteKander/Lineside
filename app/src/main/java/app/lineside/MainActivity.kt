@@ -35,6 +35,8 @@ import app.lineside.ui.BackupState
 import app.lineside.ui.ExportSheet
 import app.lineside.ui.ImportSheet
 import app.lineside.ui.ImportUi
+import app.lineside.ui.Intro
+import app.lineside.ui.IntroState
 import app.lineside.ui.ArchivedSheet
 import app.lineside.ui.CloseLoopDialog
 import app.lineside.ui.EventSheet
@@ -258,6 +260,28 @@ class MainActivity : ComponentActivity() {
         val closeApp = { finishAndRemoveTask(); android.os.Process.killProcess(android.os.Process.myPid()) }
         var openEvent by remember { mutableStateOf<Event?>(null) }
 
+        // ---- The introduction: first run, or replayed from Settings ----
+        var onboarded by remember { mutableStateOf(settings.onboarded) }
+        if (!onboarded) {
+            Intro(IntroState(
+                granted = granted, onAllow = allow,
+                lockOn = lockOn, lockAvailable = AppLock.available(ctx),
+                onLock = { lockOn = it; settings.appLock = it },
+                discreet = discreetOn, onDiscreet = { discreetOn = it; settings.discreetCallScreen = it; scope.launch { repo.resyncAll() } },
+                backupOn = backupOn, onBackup = { backupOn = it; settings.backupOn = it },
+                nudgeOn = nudgeOn, onNudge = { nudgeOn = it; settings.quietNudge = it },
+                readsTexts = Texts.available,
+                onFinish = { start ->
+                    settings.onboarded = true
+                    onboarded = true
+                    // Just unlocked or just installed: don't ask again the moment the list appears.
+                    settings.lockedAwayAt = System.currentTimeMillis()
+                    if (start) { returnTo = ListScreen; screen = Edit(null) } else screen = ListScreen
+                },
+            ))
+            return
+        }
+
         BackHandler(enabled = screen != ListScreen) {
             screen = when (val s = screen) { is Edit -> if (s.id != null) LoopView(s.id) else returnTo; else -> ListScreen }
         }
@@ -331,6 +355,7 @@ class MainActivity : ComponentActivity() {
                     },
                     onImport = { AppLock.holdForOwnScreen(); pickImport.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) },
                 ),
+                onIntro = { settings.onboarded = false; onboarded = false },
                 texts = if (!Texts.available) null else TextsState(
                     numbers = Texts.active(loops).size, granted = textsGranted, handingBack = handing,
                     canHandBack = android.os.Build.VERSION.SDK_INT >= 33, onLog = { showTextLog = true }, onCloseApp = closeApp,

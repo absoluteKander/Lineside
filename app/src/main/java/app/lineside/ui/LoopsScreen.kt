@@ -146,7 +146,7 @@ private fun SectionSign(text: String) =
     Sign(text, 15.sp, Line.c.muted, Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 2.dp).semantics { heading() }, FontWeight.SemiBold)
 
 @Composable
-private fun LoopCard(full: LoopFull, now: Long, onClick: () -> Unit) {
+internal fun LoopCard(full: LoopFull, now: Long, onClick: () -> Unit) {
     val c = Line.c
     val loop = full.loop
     Column(

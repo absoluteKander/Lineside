@@ -54,6 +54,7 @@ fun SettingsScreen(
     texts: TextsState? = null,
     lock: LockState? = null,
     backup: BackupState? = null,
+    onIntro: (() -> Unit)? = null,
 ) {
     val c = Line.c
     Column(Modifier.fillMaxSize().background(c.ground)) {
@@ -167,6 +168,16 @@ fun SettingsScreen(
                     }
                 }
             }
+            onIntro?.let { go ->
+                Section("Introduction")
+                Group {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("What Lineside does and doesn't do, the practice loop, and every choice from the first run.",
+                            Modifier.weight(1f), fontSize = 13.sp, lineHeight = 18.sp, color = c.muted)
+                        LineButton("Show again", go)
+                    }
+                }
+            }
             Section("What Lineside can do")
             Text(
                 "All optional. Lineside has no internet access, no account and never reads your call log.",
@@ -194,14 +205,14 @@ private fun Section(text: String) =
     Sign(text, 15.sp, Line.c.muted, Modifier.padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 8.dp).semantics { heading() }, FontWeight.SemiBold)
 
 @Composable
-private fun Group(content: @Composable () -> Unit) =
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).background(Line.c.surface, RoundedCornerShape(12.dp))) { content() }
+internal fun Group(inset: androidx.compose.ui.unit.Dp = 16.dp, content: @Composable () -> Unit) =
+    Column(Modifier.fillMaxWidth().padding(horizontal = inset).background(Line.c.surface, RoundedCornerShape(12.dp))) { content() }
 
 @Composable
-private fun Divider() = Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(1.dp).background(Line.c.divider))
+internal fun Divider() = Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(1.dp).background(Line.c.divider))
 
 @Composable
-private fun Toggle(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true) {
+internal fun Toggle(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true) {
     val c = Line.c
     // The whole row is the switch: easier to hit, and read as one control by TalkBack.
     Row(
@@ -226,7 +237,7 @@ private fun Toggle(title: String, detail: String, checked: Boolean, onChange: (B
 }
 
 @Composable
-private fun AccessRow(a: Access, on: Boolean, onAllow: () -> Unit) {
+internal fun AccessRow(a: Access, on: Boolean, onAllow: () -> Unit) {
     val c = Line.c
     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {

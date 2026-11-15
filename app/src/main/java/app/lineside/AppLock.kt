@@ -57,6 +57,8 @@ object AppLock {
 
     fun shouldLock(ctx: android.content.Context): Boolean {
         if (!enabled(ctx)) return false
+        // A fresh install has nothing to protect yet: the introduction comes first, the lock after it.
+        App.of(ctx).settings.let { if (!it.onboarded && it.freshStart) return false }
         if (System.currentTimeMillis() < holdUntil) { holdUntil = 0L; return false }
         val s = App.of(ctx).settings
         val away = s.lockedAwayAt
