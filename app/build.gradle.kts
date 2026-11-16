@@ -117,7 +117,7 @@ androidComponents {
                 check(hits.isEmpty()) { "Network permission found in ${variant.name} manifest: $hits" }
             }
         }
-        // Both ways of packaging a build: APKs, and the App Bundle that goes to Google Play.
+        // Both ways of packaging a build: APKs and App Bundles.
         tasks.matching { it.name == "assemble$name" || it.name == "bundle$name" }.configureEach { dependsOn(check) }
     }
 }

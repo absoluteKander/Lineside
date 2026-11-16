@@ -16,7 +16,8 @@ privacy decision described below. Where this document says "the app does X," tha
 checked against the source, not assumed from a comment. What has and hasn't been verified is set
 out honestly in [Testing and verification](#testing-and-verification).
 
-**Status: 1.0.0, on its way to Google Play.** Privacy policy: [PRIVACY.md](PRIVACY.md).
+**Status: 1.0.0, source only.** Build it yourself (see [Builds](#builds)); no app store, no
+published APKs. Privacy policy: [PRIVACY.md](PRIVACY.md).
 
 ## What it will never do
 
@@ -104,10 +105,9 @@ the app lock waits until the introduction is done; there is nothing to protect b
 | Build | Where | Difference |
 |---|---|---|
 | `foss` | Build it yourself from this source | Can add texts from a loop's numbers, as described above |
-| `play` | Google Play (planned), for a small price | No SMS permission at all; texts come in through the share sheet |
+| `play` | Build it yourself from this source | No SMS permission at all; texts come in through the share sheet. Shaped for app-store rules. |
 
-The two builds are otherwise the same code. No APKs are published on GitHub; the Play price pays
-for the work and the convenience of store updates. Nothing is held back from the source.
+The two builds are otherwise the same code. No APKs are published.
 
 ```sh
 mise exec -- ./gradlew assembleFossDebug assemblePlayDebug testFossDebugUnitTest testPlayDebugUnitTest
@@ -125,9 +125,8 @@ keyAlias=upload
 keyPassword=...
 ```
 
-Then `./gradlew bundlePlayRelease` writes `app/build/outputs/bundle/playRelease/app-play-release.aab`.
-The no-internet check runs for bundles as well as APKs. Store listing text and Data safety answers
-are in [store/LISTING.md](store/LISTING.md).
+Then `./gradlew assembleFossRelease` (or `assemblePlayRelease`) writes a signed APK under
+`app/build/outputs/apk/`. The no-internet check runs for App Bundles as well as APKs.
 
 Toolchain: AGP 8.11, Gradle 8.13, Kotlin 2.2, Room 2.7, compile/target SDK 36, min SDK 31
 (Android 12). The export uses zip4j (Apache-2.0). Fonts: Barlow Condensed and JetBrains Mono, both

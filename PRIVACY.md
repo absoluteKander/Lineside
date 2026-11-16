@@ -22,8 +22,8 @@ Lineside keeps what you put in it, in its own private storage on your phone:
 - calls from a loop's numbers, if you allow Lineside to notice calls: the number, the time, and
   (with phone-state access) when the call was answered and how long it lasted;
 - voicemails and texts you choose to share into Lineside (their text only; audio is never kept);
-- in the version built from source (not the Google Play version): texts from numbers you
-  individually switch on, and a log of every time Lineside looked at your messages.
+- in the `foss` build only: texts from numbers you individually switch on, and a log of every
+  time Lineside looked at your messages.
 
 When you close a loop, everything in it is deleted. Archived loops stay until you delete them.
 
@@ -40,7 +40,7 @@ All are optional. With none of them, you add calls and notes yourself.
 | Display over other apps | The note pill during and just after calls. |
 | Biometric / screen lock | The app lock, using your phone's own screen lock. Lineside stores nothing about it. |
 
-The Google Play version of Lineside does not request access to your text messages.
+The `play` build of Lineside does not request access to your text messages.
 
 ## Copies you make
 
