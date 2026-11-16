@@ -1,0 +1,32 @@
+Waiting on a call from the clinic, the lab, the insurance claim or the contractor? Lineside keeps track of it.
+
+Each matter is a <b>loop</b>. A loop holds that matter's calls, voicemails, texts and your own notes on one timeline, and tells you whose move it is: <i>Call back</i>, or <i>Waiting</i>. When it's done, close the loop and everything in it is gone. If they might come back, archive it instead.
+
+<b>When they call</b>
+<ul>
+<li>Your phone's call screen shows the loop's name and status, so you know what it's about before you answer.</li>
+<li>A small pill during and just after the call lets you jot a note without leaving the call.</li>
+<li>Calls from a loop's numbers are logged to it by themselves.</li>
+</ul>
+
+<b>Everything stays on your phone</b>
+<ul>
+<li>No internet permission at all: Lineside can't send anything anywhere. The build fails if one ever appears.</li>
+<li>No account, no login, no ads, no analytics, no crash reporting.</li>
+<li>Never reads your call log, and never records or transcribes a call.</li>
+<li>Voicemails and texts get in when you share them to Lineside, and you see exactly what will be added first. Texts from a loop's numbers can also be added automatically, behind two switches (the loop, then each number) that start off; every look at your messages is written to a log you can read, and the permission is handed back to Android when no number uses it.</li>
+<li>App lock with your phone's own fingerprint, face or PIN, on by default.</li>
+<li>A discreet mode for the call screen, so a ringing phone doesn't show what the call is about.</li>
+</ul>
+
+<b>Your copies, your choice</b>
+<ul>
+<li>Android backup is off unless you choose it, and then only into a backup encrypted with your screen lock.</li>
+<li>Export everything to one AES-encrypted file you can open on a computer, or import on another phone.</li>
+</ul>
+
+Every permission is optional. With none of them, you add calls and notes yourself.
+
+Lineside isn't your medical record: the originals stay with your provider. Lineside holds the notes you chose to keep about them.
+
+<b>How it was made:</b> the code was written by Claude, an AI model by Anthropic, at the direction of Absolute Candor, who specified the behaviour, reviewed the result and made every product and privacy decision. Unit tests and the no-internet check run on every change; what has and hasn't been verified by hand is listed in the README.

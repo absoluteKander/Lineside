@@ -1,0 +1,7 @@
+First release.
+- Loops: calls, voicemails, texts and notes on one timeline, with whose move it is.
+- Call-screen status and the in-call note pill.
+- Share voicemails and texts in; optional texts from a loop's numbers, with an access log.
+- Archive, app lock, discreet call screen, quiet-loop reminder.
+- Encrypted export and import; Android backup only by choice and only when encrypted.
+- A first-run introduction with a practice loop.
