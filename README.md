@@ -16,8 +16,9 @@ privacy decision described below. Where this document says "the app does X," tha
 checked against the source, not assumed from a comment. What has and hasn't been verified is set
 out honestly in [Testing and verification](#testing-and-verification).
 
-**Status: 1.0.0, source only.** Build it yourself (see [Builds](#builds)); no app store, no
-published APKs. Privacy policy: [PRIVACY.md](PRIVACY.md).
+**Status: 1.0.0.** Download the signed APK from
+[Releases](https://github.com/absoluteKander/Lineside/releases), or build it yourself (see
+[Builds](#builds)). Privacy policy: [PRIVACY.md](PRIVACY.md).
 
 ## What it will never do
 
@@ -104,10 +105,21 @@ the app lock waits until the introduction is done; there is nothing to protect b
 
 | Build | Where | Difference |
 |---|---|---|
-| `foss` | Build it yourself from this source | Can add texts from a loop's numbers, as described above |
+| `foss` | [Releases](https://github.com/absoluteKander/Lineside/releases) (signed APK), or build it yourself | Can add texts from a loop's numbers, as described above |
 | `play` | Build it yourself from this source | No SMS permission at all; texts come in through the share sheet. Shaped for app-store rules. |
 
-The two builds are otherwise the same code. No APKs are published.
+The two builds are otherwise the same code. Only the `foss` build is published.
+
+**Checking a downloaded APK.** Every release is signed with the same key. Its certificate's SHA-256
+fingerprint is:
+
+```
+c1:de:a4:eb:ee:6c:d3:83:42:f6:c1:d6:e1:6f:4c:e8:a2:e3:82:40:6f:20:0a:45:30:ba:95:28:a8:0e:fa:de
+```
+
+Check it with `apksigner verify --print-certs Lineside-1.0.0.apk`, or let an app such as AppVerifier
+compare it. Android itself refuses an update signed with a different key, so once installed, later
+versions are checked automatically.
 
 ```sh
 mise exec -- ./gradlew assembleFossDebug assemblePlayDebug testFossDebugUnitTest testPlayDebugUnitTest
